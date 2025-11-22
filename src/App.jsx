@@ -20,8 +20,6 @@ import {
 import ReactMarkdown from 'react-markdown';
 
 // --- CONFIGURATION & API ---
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
-
 const SYSTEM_PROMPT = `
 You are a helpful, intelligent AI assistant.
 CRITICAL INSTRUCTION FOR HYPERLINKS:
@@ -53,22 +51,17 @@ async function* streamClaudeResponse(history, prompt, isDeepDive = false) {
   const fullPrompt = isDeepDive ? DEEP_DIVE_PROMPT(prompt) : prompt;
   messages.push({ role: 'user', content: fullPrompt });
 
-  // API Call to Claude
+  // API Call to our serverless function
   const response = await fetch(
-    'https://api.anthropic.com/v1/messages',
+    '/api/chat',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': ANTHROPIC_API_KEY
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: messages,
-        stream: true
       })
     }
   );
@@ -438,12 +431,6 @@ export default function App() {
   const showSplitView = activeTab?.type === 'deep-dive';
 
   const handleSendMessage = async (chatId, text) => {
-    // Check for API key
-    if (!ANTHROPIC_API_KEY) {
-      alert('Please set your VITE_ANTHROPIC_API_KEY in the .env file');
-      return;
-    }
-
     // 1. Optimistically update UI with user message
     setTabs(prev => prev.map(t => {
       if (t.id === chatId) {
