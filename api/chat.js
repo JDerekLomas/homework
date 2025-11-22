@@ -23,6 +23,9 @@ export default async function handler(req) {
       });
     }
 
+    // Log the request for debugging
+    console.log('API Request:', { model, messageCount: messages.length });
+
     // Make request to Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -41,8 +44,16 @@ export default async function handler(req) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      return new Response(JSON.stringify({ error: `API Error: ${response.status} - ${error}` }), {
+      const errorText = await response.text();
+      console.error('Anthropic API Error:', response.status, errorText);
+
+      // Return detailed error for debugging
+      return new Response(JSON.stringify({
+        error: `API Error: ${response.status}`,
+        details: errorText,
+        model: model,
+        messageCount: messages.length
+      }), {
         status: response.status,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -57,7 +68,11 @@ export default async function handler(req) {
       },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Server error:', error);
+    return new Response(JSON.stringify({
+      error: error.message,
+      stack: error.stack
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

@@ -27,8 +27,9 @@ import 'katex/dist/katex.min.css';
 
 // --- CONFIGURATION ---
 const MODELS = {
-  'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet', speed: 'Fast', quality: 'High' },
-  'claude-sonnet-4-20250514': { name: 'Claude Sonnet 4', speed: 'Slower', quality: 'Highest' },
+  'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet (Oct 2024)', speed: 'Fast', quality: 'High' },
+  'claude-3-5-sonnet-20240620': { name: 'Claude 3.5 Sonnet (Jun 2024)', speed: 'Fast', quality: 'High' },
+  'claude-3-opus-20240229': { name: 'Claude 3 Opus', speed: 'Slower', quality: 'Highest' },
 };
 
 const SYSTEM_PROMPT = `You are Claude, a helpful and intelligent AI assistant created by Anthropic.
