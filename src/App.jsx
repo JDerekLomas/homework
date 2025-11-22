@@ -832,20 +832,48 @@ export default function App() {
               </h1>
             </div>
 
-            {/* Desktop: Show tab pills */}
-            <div className="hidden md:flex items-center gap-2 bg-stone-100 px-3 py-1 rounded-lg">
-              {tabs.slice(0, 5).map((tab) => (
+            {/* Desktop: Show all tabs */}
+            <div className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto custom-scrollbar">
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTabId(tab.id)}
-                  className={`px-2 py-1 text-[11px] font-medium rounded transition-all ${
-                    activeTabId === tab.id ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap group ${
+                    activeTabId === tab.id
+                      ? 'bg-white text-stone-800 shadow-sm border border-stone-200'
+                      : 'text-stone-600 hover:bg-stone-100'
                   }`}
                 >
-                  {tab.title.substring(0, 15)}
-                  {tab.title.length > 15 ? '...' : ''}
+                  <MessageSquare size={12} className={tab.type === 'deep-dive' ? 'text-orange-600' : 'text-stone-400'} />
+                  <span className="max-w-[120px] truncate">
+                    {tab.title}
+                  </span>
+                  {tabs.length > 1 && (
+                    <X
+                      size={12}
+                      className="opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTabs((prev) => prev.filter((t) => t.id !== tab.id));
+                        if (activeTabId === tab.id && tabs.length > 1) {
+                          setActiveTabId(tabs[0].id === tab.id ? tabs[1].id : tabs[0].id);
+                        }
+                      }}
+                    />
+                  )}
                 </button>
               ))}
+              <button
+                onClick={() => {
+                  const newId = `chat-${Date.now()}`;
+                  setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-haiku-4-5' }]);
+                  setActiveTabId(newId);
+                }}
+                className="flex items-center gap-1 px-2 py-1.5 text-stone-500 hover:text-orange-600 hover:bg-stone-100 rounded-lg transition-all"
+                title="New Chat"
+              >
+                <Plus size={14} />
+              </button>
             </div>
           </div>
         </div>
