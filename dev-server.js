@@ -7,7 +7,7 @@ app.use(express.json());
 // API endpoint that mimics the Vercel serverless function
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, system, model = 'claude-3-5-sonnet-20241022' } = req.body;
+    const { messages, system, model = 'claude-3-5-sonnet-20240620' } = req.body;
 
     const ANTHROPIC_API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
 
