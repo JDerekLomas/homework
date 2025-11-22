@@ -37,20 +37,22 @@ const MODELS = {
   'claude-3-haiku-20240307': { name: 'Claude 3 Haiku', speed: 'Very Fast', quality: 'Good' },
 };
 
-const SYSTEM_PROMPT = `You are Claude, a helpful and intelligent AI assistant created by Anthropic.
+const DEFAULT_SYSTEM_PROMPT = `You are Claude, a helpful and intelligent AI assistant created by Anthropic.
 
 When introducing important technical concepts, you can optionally highlight them using this syntax:
 ~^Term|Brief definition^~
 
 Respond naturally using Markdown formatting. Use code blocks with language tags for code.`;
 
+const DEFAULT_DEEP_DIVE_PROMPT = `Provide a comprehensive deep dive into: {topic}. Include technical details, examples, and practical applications.`;
+
 // --- HELPER: Stream Generator ---
-async function* streamClaudeResponse(messages, model = 'claude-haiku-4-5') {
+async function* streamClaudeResponse(messages, model = 'claude-haiku-4-5', systemPrompt = DEFAULT_SYSTEM_PROMPT) {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: messages,
       model: model,
     })
@@ -512,40 +514,114 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
 };
 
 // Settings Modal
-const SettingsModal = ({ isOpen, onClose, currentModel, onModelChange }) => {
+const SettingsModal = ({ isOpen, onClose, currentModel, onModelChange, prompts, onPromptsChange }) => {
+  const [activeTab, setActiveTab] = useState('model');
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
         <div className="p-6 border-b border-stone-200 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-stone-900">Settings</h2>
           <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
             <X size={20} />
           </button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-2">Model</label>
-            <div className="space-y-2">
-              {Object.entries(MODELS).map(([key, model]) => (
-                <button
-                  key={key}
-                  onClick={() => onModelChange(key)}
-                  className={`w-full text-left p-3 rounded-lg border transition-all ${
-                    currentModel === key
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
-                  }`}
-                >
-                  <div className="font-medium text-stone-900">{model.name}</div>
-                  <div className="text-xs text-stone-600 mt-1">
-                    Speed: {model.speed} • Quality: {model.quality}
-                  </div>
-                </button>
-              ))}
-            </div>
+
+        {/* Tabs */}
+        <div className="border-b border-stone-200 px-6">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('model')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'model'
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Model
+            </button>
+            <button
+              onClick={() => setActiveTab('prompts')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'prompts'
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Prompts
+            </button>
           </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'model' && (
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-3">Select Model</label>
+              <div className="space-y-2">
+                {Object.entries(MODELS).map(([key, model]) => (
+                  <button
+                    key={key}
+                    onClick={() => onModelChange(key)}
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
+                      currentModel === key
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                    }`}
+                  >
+                    <div className="font-medium text-stone-900">{model.name}</div>
+                    <div className="text-xs text-stone-600 mt-1">
+                      Speed: {model.speed} • Quality: {model.quality}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'prompts' && (
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-stone-700">System Prompt</label>
+                  <button
+                    onClick={() => onPromptsChange({ ...prompts, system: DEFAULT_SYSTEM_PROMPT })}
+                    className="text-xs text-orange-600 hover:text-orange-700 font-medium"
+                  >
+                    Reset to default
+                  </button>
+                </div>
+                <textarea
+                  value={prompts.system}
+                  onChange={(e) => onPromptsChange({ ...prompts, system: e.target.value })}
+                  className="w-full h-32 px-3 py-2 border border-stone-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
+                  placeholder="Enter system prompt..."
+                />
+                <p className="text-xs text-stone-500 mt-1">Used for all chat conversations</p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-stone-700">Deep Dive Prompt</label>
+                  <button
+                    onClick={() => onPromptsChange({ ...prompts, deepDive: DEFAULT_DEEP_DIVE_PROMPT })}
+                    className="text-xs text-orange-600 hover:text-orange-700 font-medium"
+                  >
+                    Reset to default
+                  </button>
+                </div>
+                <textarea
+                  value={prompts.deepDive}
+                  onChange={(e) => onPromptsChange({ ...prompts, deepDive: e.target.value })}
+                  className="w-full h-24 px-3 py-2 border border-stone-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
+                  placeholder="Enter deep dive prompt template..."
+                />
+                <p className="text-xs text-stone-500 mt-1">Use {'{topic}'} as placeholder for the concept. Example: "Explain {'{topic}'} in detail"</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -562,6 +638,20 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Custom prompts
+  const [prompts, setPrompts] = useState(() => {
+    const saved = localStorage.getItem('customPrompts');
+    return saved ? JSON.parse(saved) : {
+      system: DEFAULT_SYSTEM_PROMPT,
+      deepDive: DEFAULT_DEEP_DIVE_PROMPT,
+    };
+  });
+
+  // Save prompts to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('customPrompts', JSON.stringify(prompts));
+  }, [prompts]);
 
   const tabsRef = useRef(tabs);
   useEffect(() => {
@@ -609,9 +699,9 @@ export default function App() {
     try {
       const currentChat = tabsRef.current.find((t) => t.id === chatId);
       const history = currentChat ? [...currentChat.messages, { role: 'user', content: text }] : [{ role: 'user', content: text }];
-      const model = currentChat?.model || 'claude-3-5-sonnet-20241022';
+      const model = currentChat?.model || 'claude-haiku-4-5';
 
-      const stream = streamClaudeResponse(history, model);
+      const stream = streamClaudeResponse(history, model, prompts.system);
 
       // Add empty assistant message
       setTabs((prev) =>
@@ -702,7 +792,8 @@ export default function App() {
     setActiveTabId(newTabId);
 
     setTimeout(() => {
-      handleSendMessage(newTabId, `Provide a comprehensive deep dive into: ${topic}. Include technical details, examples, and practical applications.`);
+      const promptText = prompts.deepDive.replace('{topic}', topic);
+      handleSendMessage(newTabId, promptText);
     }, 100);
   };
 
@@ -923,7 +1014,14 @@ export default function App() {
       </div>
 
       {/* Settings Modal */}
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} currentModel={activeTab?.model} onModelChange={changeModel} />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        currentModel={activeTab?.model}
+        onModelChange={changeModel}
+        prompts={prompts}
+        onPromptsChange={setPrompts}
+      />
     </div>
   );
 }
