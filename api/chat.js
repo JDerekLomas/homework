@@ -12,7 +12,7 @@ export default async function handler(req) {
   }
 
   try {
-    const { messages, system, model = 'claude-3-5-sonnet-20240620' } = await req.json();
+    const { messages, system, model = 'claude-3-5-haiku-20241022' } = await req.json();
 
     const ANTHROPIC_API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
 

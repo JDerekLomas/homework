@@ -27,10 +27,12 @@ import 'katex/dist/katex.min.css';
 
 // --- CONFIGURATION ---
 const MODELS = {
-  'claude-3-5-sonnet-20240620': { name: 'Claude 3.5 Sonnet', speed: 'Fast', quality: 'Excellent' },
+  'claude-3-5-haiku-20241022': { name: 'Claude 3.5 Haiku', speed: 'Fastest', quality: 'Excellent' },
+  'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet (Latest)', speed: 'Fast', quality: 'Excellent' },
+  'claude-3-5-sonnet-20240620': { name: 'Claude 3.5 Sonnet (June)', speed: 'Fast', quality: 'Excellent' },
   'claude-3-opus-20240229': { name: 'Claude 3 Opus', speed: 'Slower', quality: 'Highest' },
   'claude-3-sonnet-20240229': { name: 'Claude 3 Sonnet', speed: 'Balanced', quality: 'Good' },
-  'claude-3-haiku-20240307': { name: 'Claude 3 Haiku', speed: 'Fastest', quality: 'Good' },
+  'claude-3-haiku-20240307': { name: 'Claude 3 Haiku', speed: 'Very Fast', quality: 'Good' },
 };
 
 const SYSTEM_PROMPT = `You are Claude, a helpful and intelligent AI assistant created by Anthropic.
@@ -41,7 +43,7 @@ When introducing important technical concepts, you can optionally highlight them
 Respond naturally using Markdown formatting. Use code blocks with language tags for code.`;
 
 // --- HELPER: Stream Generator ---
-async function* streamClaudeResponse(messages, model = 'claude-3-5-sonnet-20240620') {
+async function* streamClaudeResponse(messages, model = 'claude-3-5-haiku-20241022') {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -552,7 +554,7 @@ const SettingsModal = ({ isOpen, onClose, currentModel, onModelChange }) => {
 export default function App() {
   const [activeTabId, setActiveTabId] = useState('main');
   const [tabs, setTabs] = useState([
-    { id: 'main', title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-sonnet-20240620' }
+    { id: 'main', title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-haiku-20241022' }
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -691,7 +693,7 @@ export default function App() {
       title: `${topic.substring(0, 30)}...`,
       type: 'deep-dive',
       messages: [],
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-haiku-20241022',
     };
 
     setTabs((prev) => [...prev, newTab]);
@@ -762,7 +764,7 @@ export default function App() {
           <button
             onClick={() => {
               const newId = `chat-${Date.now()}`;
-              setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-sonnet-20240620' }]);
+              setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-haiku-20241022' }]);
               setActiveTabId(newId);
               if (isMobile) setSidebarOpen(false);
             }}
