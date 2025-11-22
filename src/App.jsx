@@ -126,22 +126,51 @@ const CodeBlock = ({ language, value }) => {
 // Concept Link Component
 const ConceptLink = ({ term, definition, onLearnMore }) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  const containerRef = useRef(null);
+  const timeoutRef = useRef(null);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = (e) => {
+    // Only hide if we're not moving to the tooltip
+    timeoutRef.current = setTimeout(() => {
+      setShowTooltip(false);
+    }, 150);
+  };
+
+  const handleDoubleClick = () => {
+    if (onLearnMore) {
+      onLearnMore(term);
+      setShowTooltip(false);
+    }
+  };
 
   return (
     <span
+      ref={containerRef}
       className="relative inline-block"
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <button
-        onClick={() => onLearnMore?.(term)}
+        onClick={() => setShowTooltip(!showTooltip)}
+        onDoubleClick={handleDoubleClick}
         className="mx-0.5 font-medium text-orange-600 hover:text-orange-700 border-b border-orange-300 hover:border-orange-500 transition-all"
       >
         {term}
       </button>
 
       {showTooltip && (
-        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-white rounded-lg shadow-xl border border-stone-200 p-3 text-sm text-stone-800 animate-in fade-in zoom-in-95 duration-150">
+        <div
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-white rounded-lg shadow-xl border border-stone-200 p-3 text-sm text-stone-800 animate-in fade-in zoom-in-95 duration-150"
+        >
           <div className="font-semibold mb-1 text-stone-900">{term}</div>
           <div className="text-stone-600 text-xs leading-relaxed">{definition}</div>
           {onLearnMore && (
@@ -154,7 +183,7 @@ const ConceptLink = ({ term, definition, onLearnMore }) => {
               className="mt-2 w-full text-xs font-medium bg-stone-50 hover:bg-orange-50 text-stone-700 hover:text-orange-700 py-1.5 rounded flex items-center justify-center gap-1 transition-colors"
             >
               <Sparkles size={11} />
-              Deep Dive
+              Learn More (or double-click term)
             </button>
           )}
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-white" />
