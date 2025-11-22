@@ -57,6 +57,60 @@ npm run build
 
 The built files will be in the `dist/` directory.
 
+## Deploy to Vercel
+
+### Method 1: Using Vercel Dashboard (Recommended for Web)
+
+1. **Push your code to GitHub** (already done if you followed setup)
+
+2. **Go to [Vercel](https://vercel.com/)** and sign in with GitHub
+
+3. **Click "Add New Project"**
+
+4. **Import your repository**:
+   - Select "JDerekLomas/homework" from your GitHub repos
+   - Click "Import"
+
+5. **Configure the project**:
+   - Framework Preset: Vite (should auto-detect)
+   - Root Directory: `./` (leave as is)
+   - Build Command: `npm run build` (auto-filled)
+   - Output Directory: `dist` (auto-filled)
+
+6. **Add Environment Variable**:
+   - Click "Environment Variables"
+   - Name: `VITE_ANTHROPIC_API_KEY`
+   - Value: `sk-ant-api03-your-api-key`
+   - Click "Add"
+
+7. **Click "Deploy"**
+
+Your app will be live in ~2 minutes at a URL like: `your-app.vercel.app`
+
+### Method 2: Using Vercel CLI
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Login to Vercel
+vercel login
+
+# Deploy
+vercel
+
+# Follow prompts and add environment variable when asked:
+# VITE_ANTHROPIC_API_KEY=sk-ant-api03-your-key
+```
+
+### After Deployment
+
+- **Custom Domain**: In Vercel dashboard → Settings → Domains
+- **Update Environment Variables**: Settings → Environment Variables
+- **View Logs**: Deployments → Click deployment → View Logs
+
+> ⚠️ **Important**: Your API key will be visible in the client-side code. Consider implementing a backend proxy for production use to keep your API key secure.
+
 ## How to Get an Anthropic API Key
 
 1. Go to [https://console.anthropic.com/](https://console.anthropic.com/)
