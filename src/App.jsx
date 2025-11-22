@@ -27,9 +27,10 @@ import 'katex/dist/katex.min.css';
 
 // --- CONFIGURATION ---
 const MODELS = {
-  'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet (Oct 2024)', speed: 'Fast', quality: 'High' },
-  'claude-3-5-sonnet-20240620': { name: 'Claude 3.5 Sonnet (Jun 2024)', speed: 'Fast', quality: 'High' },
+  'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet (Latest)', speed: 'Fast', quality: 'Excellent' },
+  'claude-3-5-sonnet-20240620': { name: 'Claude 3.5 Sonnet (Legacy)', speed: 'Fast', quality: 'High' },
   'claude-3-opus-20240229': { name: 'Claude 3 Opus', speed: 'Slower', quality: 'Highest' },
+  'claude-3-sonnet-20240229': { name: 'Claude 3 Sonnet', speed: 'Balanced', quality: 'Good' },
 };
 
 const SYSTEM_PROMPT = `You are Claude, a helpful and intelligent AI assistant created by Anthropic.
@@ -556,11 +557,34 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+
+  // Detect mobile and auto-close sidebar
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Auto-close sidebar on mobile when starting to chat
+  useEffect(() => {
+    if (isMobile && isStreaming && sidebarOpen) {
+      setSidebarOpen(false);
+    }
+  }, [isStreaming, isMobile]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const showSplitView = activeTab?.type === 'deep-dive';
@@ -709,8 +733,22 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
       `}</style>
 
+      {/* Mobile backdrop */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-stone-100 border-r border-stone-200 transition-all duration-300 overflow-hidden flex flex-col`}>
+      <div className={`
+        ${isMobile ? 'fixed left-0 top-0 bottom-0 z-50' : 'relative'}
+        ${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'}
+        flex-shrink-0 bg-stone-100 border-r border-stone-200
+        transition-all duration-300 overflow-hidden flex flex-col
+        ${isMobile ? 'shadow-2xl' : ''}
+      `}>
         <div className="p-4 flex items-center justify-between border-b border-stone-200">
           <div className="font-semibold text-stone-700 flex items-center gap-2">
             <div className="w-7 h-7 bg-gradient-to-br from-orange-600 to-amber-700 rounded-lg text-white flex items-center justify-center text-xs font-bold shadow">
@@ -726,6 +764,7 @@ export default function App() {
               const newId = `chat-${Date.now()}`;
               setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-sonnet-20241022' }]);
               setActiveTabId(newId);
+              if (isMobile) setSidebarOpen(false);
             }}
             className="w-full flex items-center gap-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
           >
@@ -738,7 +777,10 @@ export default function App() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTabId(tab.id)}
+              onClick={() => {
+                setActiveTabId(tab.id);
+                if (isMobile) setSidebarOpen(false);
+              }}
               className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 group transition-all ${
                 activeTabId === tab.id ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-200/50'
               }`}
@@ -770,12 +812,24 @@ export default function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full relative">
         {/* Top Bar */}
-        <div className="h-12 border-b border-stone-200 bg-white flex items-center px-4 justify-between shadow-sm z-10">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded transition-colors">
-              <Menu size={18} />
+        <div className="h-14 md:h-12 border-b border-stone-200 bg-white flex items-center px-3 md:px-4 justify-between shadow-sm z-10">
+          <div className="flex items-center gap-2 md:gap-3 flex-1">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 md:p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+            >
+              <Menu size={20} className="md:w-[18px] md:h-[18px]" />
             </button>
-            <div className="flex items-center gap-2 bg-stone-100 px-3 py-1 rounded-lg">
+
+            {/* Mobile: Show current chat title */}
+            <div className="md:hidden flex-1">
+              <h1 className="font-medium text-stone-900 text-sm truncate">
+                {activeTab?.title || 'New Chat'}
+              </h1>
+            </div>
+
+            {/* Desktop: Show tab pills */}
+            <div className="hidden md:flex items-center gap-2 bg-stone-100 px-3 py-1 rounded-lg">
               {tabs.slice(0, 5).map((tab) => (
                 <button
                   key={tab.id}
@@ -795,7 +849,7 @@ export default function App() {
         {/* Chat Panes */}
         <div className="flex-1 relative overflow-hidden">
           {/* Main Chat */}
-          <div className={`absolute inset-0 transition-all duration-500 ${showSplitView ? 'w-80' : 'w-full'}`}>
+          <div className={`absolute inset-0 transition-all duration-500 ${showSplitView ? (isMobile ? 'w-0' : 'w-80') : 'w-full'}`}>
             <ChatWindow
               chat={tabs.find((t) => t.id === 'main') || tabs[0]}
               isActive={!showSplitView}
@@ -809,9 +863,12 @@ export default function App() {
             />
           </div>
 
-          {/* Deep Dive Panel */}
+          {/* Deep Dive Panel - Full screen on mobile, split on desktop */}
           {activeTab && activeTab.type === 'deep-dive' && (
-            <div className={`absolute top-0 bottom-0 right-0 bg-white shadow-2xl transition-all duration-500 ${showSplitView ? 'w-[calc(100%-20rem)]' : 'w-0'}`}>
+            <div className={`absolute top-0 bottom-0 bg-white shadow-2xl transition-all duration-500 z-20
+              ${isMobile ? 'left-0 right-0' : 'right-0'}
+              ${showSplitView ? (isMobile ? 'w-full' : 'w-[calc(100%-20rem)]') : 'w-0'}
+            `}>
               <ChatWindow
                 chat={activeTab}
                 isActive={true}
