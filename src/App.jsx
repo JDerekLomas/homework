@@ -27,6 +27,8 @@ import 'katex/dist/katex.min.css';
 
 // --- CONFIGURATION ---
 const MODELS = {
+  'claude-haiku-4-5': { name: 'Claude Haiku 4.5', speed: 'Fastest (4-5x faster)', quality: 'Excellent' },
+  'claude-sonnet-4-5': { name: 'Claude Sonnet 4.5', speed: 'Fast', quality: 'Best Coding' },
   'claude-3-5-haiku-20241022': { name: 'Claude 3.5 Haiku', speed: 'Fastest', quality: 'Excellent' },
   'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet (Latest)', speed: 'Fast', quality: 'Excellent' },
   'claude-3-5-sonnet-20240620': { name: 'Claude 3.5 Sonnet (June)', speed: 'Fast', quality: 'Excellent' },
@@ -43,7 +45,7 @@ When introducing important technical concepts, you can optionally highlight them
 Respond naturally using Markdown formatting. Use code blocks with language tags for code.`;
 
 // --- HELPER: Stream Generator ---
-async function* streamClaudeResponse(messages, model = 'claude-3-5-haiku-20241022') {
+async function* streamClaudeResponse(messages, model = 'claude-haiku-4-5') {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -554,7 +556,7 @@ const SettingsModal = ({ isOpen, onClose, currentModel, onModelChange }) => {
 export default function App() {
   const [activeTabId, setActiveTabId] = useState('main');
   const [tabs, setTabs] = useState([
-    { id: 'main', title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-haiku-20241022' }
+    { id: 'main', title: 'New Chat', type: 'main', messages: [], model: 'claude-haiku-4-5' }
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -693,7 +695,7 @@ export default function App() {
       title: `${topic.substring(0, 30)}...`,
       type: 'deep-dive',
       messages: [],
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5',
     };
 
     setTabs((prev) => [...prev, newTab]);
@@ -764,7 +766,7 @@ export default function App() {
           <button
             onClick={() => {
               const newId = `chat-${Date.now()}`;
-              setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-haiku-20241022' }]);
+              setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-haiku-4-5' }]);
               setActiveTabId(newId);
               if (isMobile) setSidebarOpen(false);
             }}
