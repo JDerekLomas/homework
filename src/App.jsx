@@ -5,66 +5,50 @@ import {
   MessageSquare,
   X,
   ChevronLeft,
-  ChevronRight,
-  MoreHorizontal,
-  Layout,
-  Sparkles,
-  Cpu,
-  Search,
   Menu,
-  Maximize2,
-  ThumbsUp,
-  ThumbsDown,
-  BookOpen
+  Sparkles,
+  Copy,
+  Check,
+  Edit2,
+  RotateCw,
+  Trash2,
+  Code,
+  BookOpen,
+  Settings
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
+import 'katex/dist/katex.min.css';
 
-// --- CONFIGURATION & API ---
-const SYSTEM_PROMPT = `
-You are a helpful, intelligent AI assistant.
-CRITICAL INSTRUCTION FOR HYPERLINKS:
-When you introduce a specific technical concept, advanced vocabulary, or key entity, you MUST format it using this EXACT syntax:
-~^Term Name|A concise, 50-word summary of what this term means. Write this summary for a general audience.^~
+// --- CONFIGURATION ---
+const MODELS = {
+  'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet', speed: 'Fast', quality: 'High' },
+  'claude-sonnet-4-20250514': { name: 'Claude Sonnet 4', speed: 'Slower', quality: 'Highest' },
+};
 
-Example:
-"I suggest using the ~^ReAct Pattern|The ReAct pattern is a technique where LLMs generate both reasoning traces and task-specific actions in an interleaved manner, allowing for dynamic problem solving.^~ to improve reliability."
+const SYSTEM_PROMPT = `You are Claude, a helpful and intelligent AI assistant created by Anthropic.
 
-Use this frequency moderately—only for the most important 2-3 concepts per response.
-Respond in clean Markdown.
-`;
+When introducing important technical concepts, you can optionally highlight them using this syntax:
+~^Term|Brief definition^~
 
-const DEEP_DIVE_PROMPT = (topic) => `
-Provide a comprehensive, expert-level deep dive into the concept: "${topic}".
-Start with a high-level overview, then go into technical details, history, and practical applications.
-Use headers, bullet points, and code examples if relevant.
-`;
+Respond naturally using Markdown formatting. Use code blocks with language tags for code.`;
 
-// --- HELPER: Stream Generator for Claude API ---
-async function* streamClaudeResponse(history, prompt, isDeepDive = false) {
-  // Convert history to Claude's message format
-  const messages = history.map(msg => ({
-    role: msg.role === 'user' ? 'user' : 'assistant',
-    content: msg.content
-  }));
-
-  // Add the current prompt
-  const fullPrompt = isDeepDive ? DEEP_DIVE_PROMPT(prompt) : prompt;
-  messages.push({ role: 'user', content: fullPrompt });
-
-  // API Call to our serverless function
-  const response = await fetch(
-    '/api/chat',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        system: SYSTEM_PROMPT,
-        messages: messages,
-      })
-    }
-  );
+// --- HELPER: Stream Generator ---
+async function* streamClaudeResponse(messages, model = 'claude-3-5-sonnet-20241022') {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system: SYSTEM_PROMPT,
+      messages: messages,
+      model: model,
+    })
+  });
 
   if (!response.ok) {
     const error = await response.text();
@@ -81,7 +65,7 @@ async function* streamClaudeResponse(history, prompt, isDeepDive = false) {
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
-    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+    buffer = lines.pop() || '';
 
     for (const line of lines) {
       if (line.startsWith('data: ')) {
@@ -90,16 +74,11 @@ async function* streamClaudeResponse(history, prompt, isDeepDive = false) {
 
         try {
           const parsed = JSON.parse(data);
-
-          // Claude sends different event types
-          if (parsed.type === 'content_block_delta') {
-            if (parsed.delta?.text) {
-              yield parsed.delta.text;
-            }
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            yield parsed.delta.text;
           }
         } catch (e) {
-          // Ignore parse errors for incomplete chunks
-          console.warn('Parse error:', e);
+          // Ignore parse errors
         }
       }
     }
@@ -108,7 +87,43 @@ async function* streamClaudeResponse(history, prompt, isDeepDive = false) {
 
 // --- COMPONENTS ---
 
-// 1. Shimmering Link Component
+// Code Block Component with Copy Button
+const CodeBlock = ({ language, value }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group my-4">
+      <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={handleCopy}
+          className="px-2 py-1 bg-stone-700 hover:bg-stone-600 text-white text-xs rounded flex items-center gap-1"
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        language={language || 'text'}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          borderRadius: '0.5rem',
+          fontSize: '0.875rem',
+        }}
+      >
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
+};
+
+// Concept Link Component
 const ConceptLink = ({ term, definition, onLearnMore }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -119,49 +134,38 @@ const ConceptLink = ({ term, definition, onLearnMore }) => {
       onMouseLeave={() => setShowTooltip(false)}
     >
       <button
-        onClick={() => setShowTooltip(!showTooltip)}
-        className="mx-1 font-medium text-orange-600 cursor-pointer hover:text-orange-700 border-b border-orange-300 hover:border-orange-500 transition-all animate-shimmer bg-clip-text"
-        style={{
-            backgroundImage: 'linear-gradient(90deg, #ea580c 0%, #fb923c 50%, #ea580c 100%)',
-            backgroundSize: '200% auto',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            animation: 'shimmer 3s linear infinite'
-        }}
+        onClick={() => onLearnMore?.(term)}
+        className="mx-0.5 font-medium text-orange-600 hover:text-orange-700 border-b border-orange-300 hover:border-orange-500 transition-all"
       >
         {term}
       </button>
 
-      {/* Tooltip Popup */}
       {showTooltip && (
-        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-white rounded-xl shadow-xl border border-stone-200 p-4 text-sm text-stone-800 animate-in fade-in zoom-in-95 duration-200">
-          <div className="font-serif font-semibold mb-2 text-stone-900 text-base">{term}</div>
-          <div className="text-stone-600 mb-4 leading-relaxed text-xs font-sans">
-            {definition}
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onLearnMore(term);
-              setShowTooltip(false);
-            }}
-            className="w-full text-xs font-semibold bg-stone-50 hover:bg-orange-50 text-stone-600 hover:text-orange-700 py-2 rounded-lg border border-stone-100 flex items-center justify-center gap-2 transition-colors"
-          >
-            <Sparkles size={12} />
-            Learn more
-          </button>
-
-          {/* Arrow */}
-          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-8 border-transparent border-t-white" />
+        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-white rounded-lg shadow-xl border border-stone-200 p-3 text-sm text-stone-800 animate-in fade-in zoom-in-95 duration-150">
+          <div className="font-semibold mb-1 text-stone-900">{term}</div>
+          <div className="text-stone-600 text-xs leading-relaxed">{definition}</div>
+          {onLearnMore && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onLearnMore(term);
+                setShowTooltip(false);
+              }}
+              className="mt-2 w-full text-xs font-medium bg-stone-50 hover:bg-orange-50 text-stone-700 hover:text-orange-700 py-1.5 rounded flex items-center justify-center gap-1 transition-colors"
+            >
+              <Sparkles size={11} />
+              Deep Dive
+            </button>
+          )}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-white" />
         </div>
       )}
     </span>
   );
 };
 
-// 2. Message Renderer (Markdown + Custom Parser)
+// Enhanced Message Renderer
 const MessageContent = ({ content, onLearnMore }) => {
-  // Custom parsing for ~^Term|Def^~
   const parts = useMemo(() => {
     const regex = /~\^([^|]+)\|([^^]+)\^~/g;
     const result = [];
@@ -169,19 +173,13 @@ const MessageContent = ({ content, onLearnMore }) => {
     let match;
 
     while ((match = regex.exec(content)) !== null) {
-      // Text before match
       if (match.index > lastIndex) {
         result.push({ type: 'text', content: content.substring(lastIndex, match.index) });
       }
-      // The Match
-      result.push({
-        type: 'concept',
-        term: match[1],
-        definition: match[2]
-      });
+      result.push({ type: 'concept', term: match[1], definition: match[2] });
       lastIndex = regex.lastIndex;
     }
-    // Remaining text
+
     if (lastIndex < content.length) {
       result.push({ type: 'text', content: content.substring(lastIndex) });
     }
@@ -189,23 +187,37 @@ const MessageContent = ({ content, onLearnMore }) => {
   }, [content]);
 
   return (
-    <div className="prose prose-stone max-w-none prose-p:leading-7 prose-pre:bg-stone-100 prose-pre:border prose-pre:border-stone-200 font-serif text-stone-800">
+    <div className="prose prose-stone max-w-none prose-sm prose-pre:p-0 prose-pre:m-0 prose-code:text-orange-600 prose-code:bg-orange-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
       {parts.map((part, idx) => {
         if (part.type === 'concept') {
-          return (
-            <ConceptLink
-              key={idx}
-              term={part.term}
-              definition={part.definition}
-              onLearnMore={onLearnMore}
-            />
-          );
+          return <ConceptLink key={idx} term={part.term} definition={part.definition} onLearnMore={onLearnMore} />;
         }
         return (
-          <ReactMarkdown key={idx} components={{
-            p: ({node, ...props}) => <p className="mb-4 last:mb-0" {...props} />,
-            a: ({node, ...props}) => <span className="text-orange-600 underline cursor-pointer" {...props} />
-          }}>
+          <ReactMarkdown
+            key={idx}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex, rehypeRaw]}
+            components={{
+              code({ node, inline, className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || '');
+                const value = String(children).replace(/\n$/, '');
+
+                if (!inline && match) {
+                  return <CodeBlock language={match[1]} value={value} />;
+                }
+
+                return (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+              p: ({ node, ...props }) => <p className="mb-3 last:mb-0 leading-7" {...props} />,
+              a: ({ node, ...props }) => (
+                <a className="text-orange-600 hover:text-orange-700 underline" target="_blank" rel="noopener noreferrer" {...props} />
+              ),
+            }}
+          >
             {part.content}
           </ReactMarkdown>
         );
@@ -214,12 +226,86 @@ const MessageContent = ({ content, onLearnMore }) => {
   );
 };
 
-// 3. Chat Window Component
-const ChatWindow = ({ chat, onSendMessage, isActive, onClick, onLearnMore, isStreaming }) => {
+// Message Component with Actions
+const Message = ({ message, onEdit, onDelete, onRegenerate, onCopy, onLearnMore, isLast, isStreaming }) => {
+  const [showActions, setShowActions] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      className={`flex gap-4 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
+    >
+      {message.role === 'assistant' && (
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-600 to-amber-700 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm mt-1">
+          AI
+        </div>
+      )}
+
+      <div className={`max-w-[85%] relative ${message.role === 'user' ? 'bg-stone-100 text-stone-800 px-5 py-3 rounded-2xl rounded-tr-sm' : ''}`}>
+        {message.role === 'user' ? (
+          <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+        ) : (
+          <MessageContent content={message.content} onLearnMore={onLearnMore} />
+        )}
+
+        {/* Message Actions */}
+        {showActions && !isStreaming && (
+          <div className="absolute -bottom-8 left-0 flex items-center gap-1 bg-white border border-stone-200 rounded-lg shadow-lg p-1 animate-in fade-in slide-in-from-top-2 duration-150">
+            <button
+              onClick={handleCopy}
+              className="p-1.5 hover:bg-stone-100 rounded text-stone-600 hover:text-stone-900 transition-colors"
+              title="Copy"
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+            {message.role === 'assistant' && isLast && onRegenerate && (
+              <button
+                onClick={onRegenerate}
+                className="p-1.5 hover:bg-stone-100 rounded text-stone-600 hover:text-stone-900 transition-colors"
+                title="Regenerate"
+              >
+                <RotateCw size={14} />
+              </button>
+            )}
+            {message.role === 'user' && onEdit && (
+              <button
+                onClick={() => onEdit(message)}
+                className="p-1.5 hover:bg-stone-100 rounded text-stone-600 hover:text-stone-900 transition-colors"
+                title="Edit"
+              >
+                <Edit2 size={14} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(message)}
+                className="p-1.5 hover:bg-stone-100 rounded text-red-600 hover:text-red-700 transition-colors"
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Main Chat Window
+const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onRegenerateMessage, isActive, onClick, onLearnMore, isStreaming }) => {
   const scrollRef = useRef(null);
   const [input, setInput] = useState('');
-  const [selectionMenu, setSelectionMenu] = useState({ visible: false, x: 0, y: 0, text: '' });
-  const containerRef = useRef(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -227,40 +313,36 @@ const ChatWindow = ({ chat, onSendMessage, isActive, onClick, onLearnMore, isStr
     }
   }, [chat.messages, isStreaming]);
 
-  // Selection Menu Handler
   useEffect(() => {
-    const handleSelection = () => {
-        const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || !containerRef.current?.contains(selection.anchorNode)) {
-            setSelectionMenu({ visible: false, x: 0, y: 0, text: '' });
-            return;
-        }
-
-        const text = selection.toString().trim();
-        if (text.length < 2) return;
-
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-
-        setSelectionMenu({
-            visible: true,
-            x: rect.left + (rect.width / 2),
-            y: rect.top - 10,
-            text: text
-        });
-    };
-
-    document.addEventListener('selectionchange', handleSelection);
-    return () => document.removeEventListener('selectionchange', handleSelection);
-  }, []);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [input]);
 
   const handleSend = () => {
-    if (!input.trim()) return;
-    onSendMessage(chat.id, input);
+    if (!input.trim() || isStreaming) return;
+
+    if (editingMessage) {
+      onEditMessage(chat.id, editingMessage, input);
+      setEditingMessage(null);
+    } else {
+      onSendMessage(chat.id, input);
+    }
     setInput('');
   };
 
-  // If inactive (sidebar mode/squeezed mode), show simplified view
+  const handleEdit = (message) => {
+    setEditingMessage(message);
+    setInput(message.content);
+    textareaRef.current?.focus();
+  };
+
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setInput('');
+  };
+
   if (!isActive) {
     return (
       <div
@@ -268,115 +350,84 @@ const ChatWindow = ({ chat, onSendMessage, isActive, onClick, onLearnMore, isStr
         className="h-full w-full bg-stone-50/50 border-r border-stone-200 cursor-pointer hover:bg-stone-100 transition-colors relative overflow-hidden group"
       >
         <div className="p-6">
-            <h3 className="font-serif text-xl text-stone-400 mb-6 font-medium">Main Thread</h3>
-            <div className="space-y-6 opacity-30 group-hover:opacity-60 transition-opacity mask-image-b">
-                {chat.messages.slice(-4).map((m, i) => (
-                    <div key={i} className={`text-xs ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
-                        <div className={`inline-block p-3 rounded-xl shadow-sm ${m.role === 'user' ? 'bg-stone-200' : 'bg-white border'}`}>
-                           {m.content.substring(0, 50)}...
-                        </div>
-                    </div>
-                ))}
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-stone-100/30 backdrop-blur-[1px]">
-                <div className="bg-white shadow-xl border border-stone-200 rounded-full px-6 py-3 text-sm font-medium text-stone-700 flex items-center gap-2 transform scale-95 group-hover:scale-100 transition-transform">
-                    <ChevronLeft size={16} /> Back to Main Chat
+          <h3 className="font-serif text-xl text-stone-400 mb-6 font-medium">Main Chat</h3>
+          <div className="space-y-4 opacity-30 group-hover:opacity-60 transition-opacity">
+            {chat.messages.slice(-3).map((m, i) => (
+              <div key={i} className={`text-xs ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
+                <div className={`inline-block p-2 rounded-lg ${m.role === 'user' ? 'bg-stone-200' : 'bg-white border'}`}>
+                  {m.content.substring(0, 40)}...
                 </div>
+              </div>
+            ))}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-stone-100/30 backdrop-blur-sm">
+            <div className="bg-white shadow-xl border border-stone-200 rounded-full px-6 py-3 text-sm font-medium text-stone-700 flex items-center gap-2">
+              <ChevronLeft size={16} /> Back to Main
             </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-white relative font-sans" ref={containerRef}>
-
-      {/* Selection Menu Overlay */}
-      {selectionMenu.visible && (
-          <div
-            className="fixed z-50 flex items-center gap-1 bg-stone-900 text-stone-100 rounded-lg shadow-xl p-1 transform -translate-x-1/2 -translate-y-full animate-in fade-in zoom-in-95 duration-200"
-            style={{ left: selectionMenu.x, top: selectionMenu.y }}
-            onMouseDown={(e) => e.preventDefault()}
-          >
-              <button className="p-1.5 hover:bg-stone-700 rounded transition-colors" title="Thumbs Up">
-                  <ThumbsUp size={14} />
-              </button>
-              <div className="w-px h-4 bg-stone-700 mx-0.5" />
-              <button className="p-1.5 hover:bg-stone-700 rounded transition-colors" title="Thumbs Down">
-                  <ThumbsDown size={14} />
-              </button>
-              <div className="w-px h-4 bg-stone-700 mx-0.5" />
-              <button
-                onClick={() => {
-                    onLearnMore(selectionMenu.text);
-                    window.getSelection().removeAllRanges();
-                    setSelectionMenu(prev => ({...prev, visible: false}));
-                }}
-                className="flex items-center gap-1.5 px-2 py-1 hover:bg-stone-700 rounded text-xs font-medium transition-colors whitespace-nowrap"
-              >
-                  <BookOpen size={14} className="text-orange-400" />
-                  Learn More
-              </button>
-          </div>
-      )}
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar scroll-smooth" ref={scrollRef}>
-        <div className="max-w-3xl mx-auto space-y-8 pb-10">
+    <div className="flex flex-col h-full w-full bg-white relative">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar" ref={scrollRef}>
+        <div className="max-w-4xl mx-auto space-y-6 pb-8">
           {chat.messages.length === 0 && (
-            <div className="text-center mt-24 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="w-20 h-20 bg-white border border-stone-100 shadow-sm rounded-2xl mx-auto flex items-center justify-center mb-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center text-white shadow-inner">
-                    {chat.type === 'deep-dive' ? <Layout size={32}/> : <Sparkles size={32} />}
-                </div>
+            <div className="text-center mt-20 space-y-4 animate-in fade-in duration-700">
+              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-lg">
+                <Sparkles size={28} />
               </div>
-              <h2 className="text-3xl font-serif text-stone-800 tracking-tight">
-                {chat.title}
-              </h2>
-              <p className="text-stone-500 max-w-md mx-auto text-lg">
-                {chat.type === 'deep-dive'
-                  ? "Streaming comprehensive analysis..."
-                  : "Start a conversation. I'll highlight key concepts for you to explore."}
+              <h2 className="text-2xl font-serif text-stone-800">{chat.title}</h2>
+              <p className="text-stone-500 max-w-md mx-auto">
+                {chat.type === 'deep-dive' ? 'Comprehensive analysis with detailed explanations' : 'Start a conversation with Claude'}
               </p>
             </div>
           )}
 
           {chat.messages.map((msg, idx) => (
-            <div key={idx} className={`flex gap-4 md:gap-6 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
-              {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-600 to-amber-700 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm mt-1">
-                  AI
-                </div>
-              )}
-
-              <div className={`max-w-[85%] ${msg.role === 'user' ? 'bg-stone-100 text-stone-800 px-5 py-3.5 rounded-2xl rounded-tr-sm' : ''}`}>
-                 {msg.role === 'user' ? (
-                     <div className="text-base whitespace-pre-wrap font-sans">{msg.content}</div>
-                 ) : (
-                     <MessageContent content={msg.content} onLearnMore={onLearnMore} />
-                 )}
-              </div>
-            </div>
+            <Message
+              key={idx}
+              message={msg}
+              onEdit={handleEdit}
+              onDelete={(m) => onDeleteMessage(chat.id, idx)}
+              onRegenerate={idx === chat.messages.length - 1 ? () => onRegenerateMessage(chat.id) : null}
+              onLearnMore={onLearnMore}
+              isLast={idx === chat.messages.length - 1}
+              isStreaming={isStreaming && idx === chat.messages.length - 1}
+            />
           ))}
 
           {isStreaming && chat.messages[chat.messages.length - 1]?.role !== 'assistant' && (
-             <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-lg bg-stone-200 flex-shrink-0 flex items-center justify-center mt-1 animate-pulse" />
-                <div className="flex items-center gap-1 mt-3">
-                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{animationDelay: '0ms'}}/>
-                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{animationDelay: '150ms'}}/>
-                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{animationDelay: '300ms'}}/>
-                </div>
-             </div>
+            <div className="flex gap-4">
+              <div className="w-8 h-8 rounded-lg bg-stone-200 flex-shrink-0 animate-pulse" />
+              <div className="flex items-center gap-1 mt-2">
+                <div className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {/* Input Area */}
-      <div className="p-4 bg-white/80 backdrop-blur-md sticky bottom-0 z-10">
-        <div className="max-w-3xl mx-auto relative">
-          <div className="bg-white border border-stone-200 rounded-2xl p-3 shadow-sm focus-within:ring-2 focus-within:ring-orange-100 focus-within:border-orange-300 transition-all hover:border-stone-300">
+      <div className="border-t border-stone-200 p-4 bg-white">
+        <div className="max-w-4xl mx-auto">
+          {editingMessage && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
+              <Edit2 size={12} />
+              Editing message
+              <button onClick={cancelEdit} className="ml-auto text-stone-600 hover:text-stone-900">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 focus-within:ring-2 focus-within:ring-orange-200 focus-within:border-orange-300 transition-all">
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -384,27 +435,40 @@ const ChatWindow = ({ chat, onSendMessage, isActive, onClick, onLearnMore, isStr
                   e.preventDefault();
                   handleSend();
                 }
+                if (e.key === 'Escape' && editingMessage) {
+                  cancelEdit();
+                }
               }}
-              placeholder={chat.type === 'deep-dive' ? "Ask follow-up questions about this topic..." : "How can I help you today?"}
-              className="w-full bg-transparent border-none focus:ring-0 resize-none text-stone-800 placeholder-stone-400 min-h-[48px] max-h-32 text-base py-2 px-1 font-sans"
+              placeholder="Message Claude..."
+              className="w-full bg-transparent border-none focus:ring-0 resize-none text-stone-800 placeholder-stone-400 text-sm max-h-40"
               rows={1}
+              disabled={isStreaming}
             />
-            <div className="flex justify-between items-center mt-2 pt-2 border-t border-stone-100">
-                <div className="flex gap-2 text-stone-400">
-                    <button className="p-2 hover:bg-stone-100 rounded-lg transition-colors" title="Add Attachment"><Plus size={18} /></button>
-                    <button className="p-2 hover:bg-stone-100 rounded-lg transition-colors hidden sm:block" title="Use Microphone"><Maximize2 size={16} /></button>
-                </div>
-                <button
-                    onClick={handleSend}
-                    disabled={!input.trim() || isStreaming}
-                    className={`p-2 px-4 rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${input.trim() ? 'bg-orange-600 text-white shadow-md hover:bg-orange-700 hover:shadow-lg transform hover:-translate-y-0.5' : 'bg-stone-100 text-stone-400 cursor-not-allowed'}`}
-                >
-                    Send <Send size={14} />
-                </button>
+            <div className="flex justify-between items-center mt-2 pt-2 border-t border-stone-200">
+              <div className="text-xs text-stone-400">
+                {chat.model && MODELS[chat.model] && (
+                  <span className="flex items-center gap-1">
+                    <Code size={12} />
+                    {MODELS[chat.model].name}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isStreaming}
+                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
+                  input.trim() && !isStreaming
+                    ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-md hover:shadow-lg'
+                    : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                }`}
+              >
+                {editingMessage ? 'Update' : 'Send'}
+                <Send size={14} />
+              </button>
             </div>
           </div>
-          <div className="text-center mt-3">
-            <span className="text-[11px] text-stone-400 font-medium">Claude Sonnet 4 • Results may vary</span>
+          <div className="text-center mt-2">
+            <span className="text-[10px] text-stone-400">Claude can make mistakes. Please verify important information.</span>
           </div>
         </div>
       </div>
@@ -412,242 +476,335 @@ const ChatWindow = ({ chat, onSendMessage, isActive, onClick, onLearnMore, isStr
   );
 };
 
-// --- MAIN APP COMPONENT ---
+// Settings Modal
+const SettingsModal = ({ isOpen, onClose, currentModel, onModelChange }) => {
+  if (!isOpen) return null;
 
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-stone-200 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-stone-900">Settings</h2>
+          <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-2">Model</label>
+            <div className="space-y-2">
+              {Object.entries(MODELS).map(([key, model]) => (
+                <button
+                  key={key}
+                  onClick={() => onModelChange(key)}
+                  className={`w-full text-left p-3 rounded-lg border transition-all ${
+                    currentModel === key
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  <div className="font-medium text-stone-900">{model.name}</div>
+                  <div className="text-xs text-stone-600 mt-1">
+                    Speed: {model.speed} • Quality: {model.quality}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main App
 export default function App() {
   const [activeTabId, setActiveTabId] = useState('main');
   const [tabs, setTabs] = useState([
-    { id: 'main', title: 'New Chat', type: 'main', messages: [] }
+    { id: 'main', title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-sonnet-20241022' }
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  const activeTab = tabs.find(t => t.id === activeTabId);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
   const showSplitView = activeTab?.type === 'deep-dive';
 
   const handleSendMessage = async (chatId, text) => {
-    // 1. Optimistically update UI with user message
-    setTabs(prev => prev.map(t => {
-      if (t.id === chatId) {
-        return { ...t, messages: [...t.messages, { role: 'user', content: text }] };
-      }
-      return t;
-    }));
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id === chatId) {
+          return { ...t, messages: [...t.messages, { role: 'user', content: text }] };
+        }
+        return t;
+      })
+    );
 
     setIsStreaming(true);
-    let fullResponse = "";
+    let fullResponse = '';
 
     try {
-      let currentChat = tabsRef.current.find(t => t.id === chatId);
-      let history = currentChat ? [...currentChat.messages] : [];
-      history.push({ role: 'user', content: text });
+      const currentChat = tabsRef.current.find((t) => t.id === chatId);
+      const history = currentChat ? [...currentChat.messages, { role: 'user', content: text }] : [{ role: 'user', content: text }];
+      const model = currentChat?.model || 'claude-3-5-sonnet-20241022';
 
-      const isDeepDive = currentChat?.type === 'deep-dive';
+      const stream = streamClaudeResponse(history, model);
 
-      // Start Stream
-      const stream = streamClaudeResponse(history, text, isDeepDive);
+      // Add empty assistant message
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (t.id === chatId) {
+            return { ...t, messages: [...t.messages, { role: 'assistant', content: '' }] };
+          }
+          return t;
+        })
+      );
 
       for await (const chunk of stream) {
         fullResponse += chunk;
-        setTabs(prev => prev.map(t => {
-          if (t.id === chatId) {
-            const msgs = [...t.messages];
-            const lastMsg = msgs[msgs.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant') {
-               lastMsg.content = fullResponse;
-            } else {
-               msgs.push({ role: 'assistant', content: fullResponse });
+        setTabs((prev) =>
+          prev.map((t) => {
+            if (t.id === chatId) {
+              const msgs = [...t.messages];
+              msgs[msgs.length - 1].content = fullResponse;
+              return { ...t, messages: msgs };
             }
-            return { ...t, messages: msgs };
-          }
-          return t;
-        }));
+            return t;
+          })
+        );
       }
     } catch (error) {
-      console.error("Stream error:", error);
+      console.error('Stream error:', error);
       alert(`Error: ${error.message}`);
     } finally {
       setIsStreaming(false);
     }
   };
 
+  const handleEditMessage = (chatId, message, newContent) => {
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id === chatId) {
+          const idx = t.messages.indexOf(message);
+          if (idx !== -1) {
+            const newMessages = t.messages.slice(0, idx);
+            return { ...t, messages: newMessages };
+          }
+        }
+        return t;
+      })
+    );
+    handleSendMessage(chatId, newContent);
+  };
+
+  const handleDeleteMessage = (chatId, messageIndex) => {
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id === chatId) {
+          const newMessages = t.messages.filter((_, idx) => idx !== messageIndex);
+          return { ...t, messages: newMessages };
+        }
+        return t;
+      })
+    );
+  };
+
+  const handleRegenerateMessage = (chatId) => {
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id === chatId && t.messages.length >= 2) {
+          const lastUserMessage = [...t.messages].reverse().find((m) => m.role === 'user');
+          if (lastUserMessage) {
+            const newMessages = t.messages.slice(0, -1);
+            setTimeout(() => handleSendMessage(chatId, lastUserMessage.content), 0);
+            return { ...t, messages: newMessages };
+          }
+        }
+        return t;
+      })
+    );
+  };
+
   const startDeepDive = (topic) => {
     const newTabId = `dive-${Date.now()}`;
     const newTab = {
       id: newTabId,
-      title: `Deep Dive: ${topic}`,
+      title: `${topic.substring(0, 30)}...`,
       type: 'deep-dive',
-      messages: []
+      messages: [],
+      model: 'claude-3-5-sonnet-20241022',
     };
 
-    setTabs(prev => [...prev, newTab]);
+    setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTabId);
 
     setTimeout(() => {
-        handleSendMessage(newTabId, `Start deep dive on: ${topic}`);
+      handleSendMessage(newTabId, `Provide a comprehensive deep dive into: ${topic}. Include technical details, examples, and practical applications.`);
     }, 100);
   };
 
   const closeTab = (id, e) => {
-    e.stopPropagation();
-    const newTabs = tabs.filter(t => t.id !== id);
+    e?.stopPropagation();
+    if (id === 'main') return;
+    const newTabs = tabs.filter((t) => t.id !== id);
     setTabs(newTabs);
     if (activeTabId === id) {
       setActiveTabId(newTabs[newTabs.length - 1].id);
     }
   };
 
-  return (
-    <div className="flex h-screen w-full bg-stone-50 text-stone-900 font-sans overflow-hidden selection:bg-orange-100 selection:text-orange-900">
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: 200% center; }
-          100% { background-position: -200% center; }
+  const changeModel = (model) => {
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id === activeTabId) {
+          return { ...t, model };
         }
+        return t;
+      })
+    );
+    setSettingsOpen(false);
+  };
+
+  return (
+    <div className="flex h-screen w-full bg-stone-50 text-stone-900 overflow-hidden selection:bg-orange-100">
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e5e4; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #d6d3d1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
       `}</style>
 
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-stone-100 border-r border-stone-200 transition-all duration-300 ease-in-out overflow-hidden flex flex-col`}>
-        <div className="p-4 flex items-center justify-between">
-            <div className="font-serif font-semibold text-stone-700 tracking-tight flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-amber-700 rounded-lg text-white flex items-center justify-center font-bold font-sans shadow-sm">C</div>
-                Claude <span className="text-[10px] uppercase tracking-wider text-stone-400 font-sans font-normal mt-1">Chat</span>
+      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-stone-100 border-r border-stone-200 transition-all duration-300 overflow-hidden flex flex-col`}>
+        <div className="p-4 flex items-center justify-between border-b border-stone-200">
+          <div className="font-semibold text-stone-700 flex items-center gap-2">
+            <div className="w-7 h-7 bg-gradient-to-br from-orange-600 to-amber-700 rounded-lg text-white flex items-center justify-center text-xs font-bold shadow">
+              C
             </div>
+            <span className="text-sm">Claude Chat</span>
+          </div>
         </div>
 
-        <div className="px-3 py-2">
+        <div className="p-3">
+          <button
+            onClick={() => {
+              const newId = `chat-${Date.now()}`;
+              setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-3-5-sonnet-20241022' }]);
+              setActiveTabId(newId);
+            }}
+            className="w-full flex items-center gap-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+          >
+            <Plus size={16} className="text-orange-600" /> New Chat
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
+          <div className="text-[10px] font-semibold text-stone-400 px-2 py-1 uppercase tracking-wider">Chats</div>
+          {tabs.map((tab) => (
             <button
-                onClick={() => {
-                    setActiveTabId('main');
-                }}
-                className="w-full flex items-center gap-2 bg-white hover:bg-stone-50 border border-stone-200 shadow-sm text-stone-700 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 group transition-all ${
+                activeTabId === tab.id ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-200/50'
+              }`}
             >
-                <Plus size={16} className="text-orange-600" /> New Chat
-            </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-             <div className="text-xs font-medium text-stone-400 px-2 py-2 uppercase tracking-wider">Recents</div>
-             {tabs.map(tab => (
-                 <button
-                    key={tab.id}
-                    onClick={() => setActiveTabId(tab.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm truncate flex items-center gap-2 group transition-colors ${activeTabId === tab.id ? 'bg-stone-200 text-stone-900' : 'text-stone-600 hover:bg-stone-200/50'}`}
-                 >
-                    {tab.type === 'deep-dive' ? <Layout size={14} className="text-orange-600" /> : <MessageSquare size={14} />}
-                    <span className="truncate flex-1 font-medium">{tab.title}</span>
-                    {tab.id !== 'main' && (
-                        <X
-                            size={12}
-                            className="opacity-0 group-hover:opacity-100 hover:text-red-500"
-                            onClick={(e) => closeTab(tab.id, e)}
-                        />
-                    )}
-                 </button>
-             ))}
-        </div>
-
-        <div className="p-4 border-t border-stone-200">
-            <div className="flex items-center gap-3 text-sm text-stone-600 cursor-pointer hover:text-stone-900 transition-colors p-2 hover:bg-stone-200/50 rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-stone-400 to-stone-500 flex items-center justify-center text-white font-bold text-xs">
-                    U
-                </div>
-                <div className="flex-1">
-                    <div className="font-medium">User Account</div>
-                    <div className="text-xs text-stone-400">Free Plan</div>
-                </div>
-            </div>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full relative">
-
-        {/* Top Bar */}
-        <div className="h-14 border-b border-stone-200 bg-white flex items-center px-4 justify-between flex-shrink-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center gap-4 overflow-x-auto no-scrollbar w-full">
-                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg transition-colors">
-                    <Menu size={20} />
-                </button>
-
-                {/* Tabs */}
-                <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-lg">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTabId(tab.id)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-2 border ${
-                                activeTabId === tab.id
-                                ? 'bg-white text-stone-800 shadow-sm border-stone-200'
-                                : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50 border-transparent'
-                            }`}
-                        >
-                            {tab.type === 'deep-dive' && <Sparkles size={12} className="text-orange-500" />}
-                            {tab.title}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        </div>
-
-        {/* Sliding Panes Container */}
-        <div className="flex-1 relative overflow-hidden bg-stone-100">
-
-            {/* Pane 1: Main Chat */}
-            <div
-                className={`absolute top-0 bottom-0 left-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-2xl z-10 overflow-hidden border-r border-stone-200
-                    ${showSplitView ? 'w-[320px] translate-x-0' : 'w-full translate-x-0'}
-                `}
-            >
-                 <ChatWindow
-                    chat={tabs.find(t => t.id === 'main')}
-                    isActive={!showSplitView}
-                    onClick={() => setActiveTabId('main')}
-                    onSendMessage={handleSendMessage}
-                    onLearnMore={startDeepDive}
-                    isStreaming={isStreaming}
+              <MessageSquare size={13} className={tab.type === 'deep-dive' ? 'text-orange-600' : ''} />
+              <span className="truncate flex-1">{tab.title}</span>
+              {tab.id !== 'main' && (
+                <X
+                  size={12}
+                  className="opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                  onClick={(e) => closeTab(tab.id, e)}
                 />
-            </div>
-
-            {/* Pane 2: Deep Dive */}
-            <div
-                className={`absolute top-0 bottom-0 right-0 bg-white transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] z-20 shadow-[-20px_0_40px_rgba(0,0,0,0.05)]
-                    ${showSplitView ? 'w-[calc(100%-320px)] translate-x-0' : 'w-[calc(100%-320px)] translate-x-full'}
-                `}
-            >
-                 {activeTab && activeTab.type === 'deep-dive' && (
-                     <>
-                        <ChatWindow
-                            chat={activeTab}
-                            isActive={true}
-                            onSendMessage={handleSendMessage}
-                            onLearnMore={startDeepDive}
-                            isStreaming={isStreaming}
-                        />
-
-                        <button
-                            onClick={() => setActiveTabId('main')}
-                            className="absolute top-4 right-4 p-2 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg text-stone-500 transition-colors shadow-sm"
-                            title="Close Deep Dive"
-                        >
-                            <X size={18} />
-                        </button>
-                    </>
-                 )}
-            </div>
-
+              )}
+            </button>
+          ))}
         </div>
 
+        <div className="p-3 border-t border-stone-200">
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-full flex items-center gap-2 text-stone-600 hover:text-stone-900 hover:bg-stone-200/50 px-3 py-2 rounded-lg text-xs transition-all"
+          >
+            <Settings size={14} />
+            Settings
+          </button>
+        </div>
       </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-full relative">
+        {/* Top Bar */}
+        <div className="h-12 border-b border-stone-200 bg-white flex items-center px-4 justify-between shadow-sm z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded transition-colors">
+              <Menu size={18} />
+            </button>
+            <div className="flex items-center gap-2 bg-stone-100 px-3 py-1 rounded-lg">
+              {tabs.slice(0, 5).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  className={`px-2 py-1 text-[11px] font-medium rounded transition-all ${
+                    activeTabId === tab.id ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+                  }`}
+                >
+                  {tab.title.substring(0, 15)}
+                  {tab.title.length > 15 ? '...' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Chat Panes */}
+        <div className="flex-1 relative overflow-hidden">
+          {/* Main Chat */}
+          <div className={`absolute inset-0 transition-all duration-500 ${showSplitView ? 'w-80' : 'w-full'}`}>
+            <ChatWindow
+              chat={tabs.find((t) => t.id === 'main') || tabs[0]}
+              isActive={!showSplitView}
+              onClick={() => setActiveTabId('main')}
+              onSendMessage={handleSendMessage}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
+              onRegenerateMessage={handleRegenerateMessage}
+              onLearnMore={startDeepDive}
+              isStreaming={isStreaming && activeTabId === 'main'}
+            />
+          </div>
+
+          {/* Deep Dive Panel */}
+          {activeTab && activeTab.type === 'deep-dive' && (
+            <div className={`absolute top-0 bottom-0 right-0 bg-white shadow-2xl transition-all duration-500 ${showSplitView ? 'w-[calc(100%-20rem)]' : 'w-0'}`}>
+              <ChatWindow
+                chat={activeTab}
+                isActive={true}
+                onSendMessage={handleSendMessage}
+                onEditMessage={handleEditMessage}
+                onDeleteMessage={handleDeleteMessage}
+                onRegenerateMessage={handleRegenerateMessage}
+                onLearnMore={startDeepDive}
+                isStreaming={isStreaming && activeTabId === activeTab.id}
+              />
+              <button
+                onClick={() => closeTab(activeTab.id)}
+                className="absolute top-3 right-3 p-2 bg-white hover:bg-stone-100 border border-stone-200 rounded-lg text-stone-500 hover:text-stone-700 transition-all shadow-sm"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Settings Modal */}
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} currentModel={activeTab?.model} onModelChange={changeModel} />
     </div>
   );
 }

@@ -7,13 +7,15 @@ app.use(express.json());
 // API endpoint that mimics the Vercel serverless function
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, system } = req.body;
+    const { messages, system, model = 'claude-3-5-sonnet-20241022' } = req.body;
 
     const ANTHROPIC_API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
 
     if (!ANTHROPIC_API_KEY) {
       return res.status(500).json({ error: 'API key not configured. Please set VITE_ANTHROPIC_API_KEY in .env file' });
     }
+
+    console.log(`📤 Request: model=${model}, messages=${messages.length}`);
 
     // Make request to Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -24,7 +26,7 @@ app.post('/api/chat', async (req, res) => {
         'x-api-key': ANTHROPIC_API_KEY,
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: model,
         max_tokens: 4096,
         system: system,
         messages: messages,

@@ -12,7 +12,7 @@ export default async function handler(req) {
   }
 
   try {
-    const { messages, system } = await req.json();
+    const { messages, system, model = 'claude-3-5-sonnet-20241022' } = await req.json();
 
     const ANTHROPIC_API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
 
@@ -32,7 +32,7 @@ export default async function handler(req) {
         'x-api-key': ANTHROPIC_API_KEY,
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: model,
         max_tokens: 4096,
         system: system,
         messages: messages,
