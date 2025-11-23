@@ -125,8 +125,9 @@ const CodeBlock = ({ language, value }) => {
         customStyle={{
           margin: 0,
           borderRadius: '0.5rem',
-          fontSize: '0.75rem',
-          padding: '0.75rem',
+          fontSize: '0.688rem',
+          padding: '0.625rem',
+          lineHeight: '1.5',
         }}
       >
         {value}
@@ -228,7 +229,7 @@ const MessageContent = ({ content, onLearnMore }) => {
   }, [content]);
 
   return (
-    <div className="prose prose-stone max-w-none text-[13px] leading-relaxed prose-p:my-2 prose-p:leading-relaxed prose-headings:mt-4 prose-headings:mb-2 prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:p-0 prose-pre:my-3 prose-pre:m-0 prose-code:text-[12px] prose-code:text-orange-600 prose-code:bg-orange-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
+    <div className="prose prose-stone max-w-none text-[11.5px] leading-[1.55] prose-p:my-1 prose-p:leading-[1.6] prose-headings:mt-2.5 prose-headings:mb-1 prose-headings:font-semibold prose-h1:text-sm prose-h2:text-[13px] prose-h3:text-xs prose-ul:my-1 prose-ul:pl-4 prose-ol:my-1 prose-ol:pl-4 prose-li:my-0 prose-li:leading-[1.6] prose-pre:p-0 prose-pre:my-2 prose-pre:m-0 prose-code:text-[10.5px] prose-code:text-orange-600 prose-code:bg-orange-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-blockquote:my-1.5 prose-blockquote:py-0 prose-strong:font-semibold">
       {parts.map((part, idx) => {
         if (part.type === 'concept') {
           return <ConceptLink key={idx} term={part.term} definition={part.definition} onLearnMore={onLearnMore} />;
@@ -253,7 +254,7 @@ const MessageContent = ({ content, onLearnMore }) => {
                   </code>
                 );
               },
-              p: ({ node, ...props }) => <p className="mb-3 last:mb-0 leading-7" {...props} />,
+              p: ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,
               a: ({ node, ...props }) => (
                 <a className="text-orange-600 hover:text-orange-700 underline" target="_blank" rel="noopener noreferrer" {...props} />
               ),
@@ -290,9 +291,9 @@ const Message = ({ message, onEdit, onDelete, onRegenerate, onCopy, onLearnMore,
         </div>
       )}
 
-      <div className={`max-w-[85%] relative ${message.role === 'user' ? 'bg-stone-100 text-stone-800 px-4 py-2.5 rounded-2xl rounded-tr-sm' : ''}`}>
+      <div className={`max-w-[85%] relative ${message.role === 'user' ? 'bg-stone-100 text-stone-800 px-3.5 py-2 rounded-2xl rounded-tr-sm' : ''}`}>
         {message.role === 'user' ? (
-          <div className="text-[13px] leading-relaxed whitespace-pre-wrap">{message.content}</div>
+          <div className="text-[11.5px] leading-[1.6] whitespace-pre-wrap">{message.content}</div>
         ) : (
           <MessageContent content={message.content} onLearnMore={onLearnMore} />
         )}
@@ -417,8 +418,8 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 custom-scrollbar" ref={scrollRef}>
-        <div className="max-w-4xl mx-auto space-y-3 pb-6">
+      <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar" ref={scrollRef}>
+        <div className="max-w-4xl mx-auto space-y-2.5 pb-6">
           {activeSubTab.messages.length === 0 && (
             <div className="text-center mt-12 space-y-6 animate-in fade-in duration-700">
               <div className="space-y-3">
