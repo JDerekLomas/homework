@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.1",
+    "@supabase/supabase-js": "^2.84.0",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

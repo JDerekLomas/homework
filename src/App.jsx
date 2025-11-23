@@ -14,9 +14,12 @@ import {
   Trash2,
   Code,
   BookOpen,
-  Settings
+  Settings,
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { supabase, saveChat, loadChats, deleteChat } from './supabase';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
@@ -662,9 +665,55 @@ export default function App() {
     localStorage.setItem('customPrompts', JSON.stringify(prompts));
   }, [prompts]);
 
+  // Supabase sync state
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const saveTimeoutRef = useRef(null);
+
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
+  }, [tabs]);
+
+  // Load chats from Supabase on mount
+  useEffect(() => {
+    async function loadInitialChats() {
+      if (!supabase) return;
+
+      const savedChats = await loadChats();
+      if (savedChats && savedChats.length > 0) {
+        setTabs(savedChats);
+        setActiveTabId(savedChats[0].id);
+      }
+    }
+    loadInitialChats();
+  }, []);
+
+  // Auto-save chats to Supabase (debounced)
+  useEffect(() => {
+    if (!supabase || tabs.length === 0) return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      setIsSaving(true);
+
+      // Save all chats
+      for (const chat of tabs) {
+        await saveChat(chat);
+      }
+
+      setIsSaving(false);
+      setLastSaved(new Date());
+    }, 1000); // Debounce for 1 second
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [tabs]);
 
   // Detect mobile and auto-close sidebar
@@ -884,9 +933,15 @@ export default function App() {
     );
   };
 
-  const closeTab = (id, e) => {
+  const closeTab = async (id, e) => {
     e?.stopPropagation();
     if (id === 'main') return;
+
+    // Delete from Supabase
+    if (supabase) {
+      await deleteChat(id);
+    }
+
     const newTabs = tabs.filter((t) => t.id !== id);
     setTabs(newTabs);
     if (activeTabId === id) {
@@ -986,7 +1041,35 @@ export default function App() {
           ))}
         </div>
 
-        <div className="p-3 border-t border-stone-200">
+        <div className="p-3 border-t border-stone-200 space-y-2">
+          {/* Sync Status */}
+          {supabase && (
+            <div className="flex items-center gap-2 px-3 py-2 text-[10px] text-stone-500">
+              {isSaving ? (
+                <>
+                  <Cloud size={12} className="animate-pulse text-orange-600" />
+                  <span>Saving...</span>
+                </>
+              ) : lastSaved ? (
+                <>
+                  <Cloud size={12} className="text-green-600" />
+                  <span>Saved {new Date(lastSaved).toLocaleTimeString()}</span>
+                </>
+              ) : (
+                <>
+                  <Cloud size={12} className="text-stone-400" />
+                  <span>Sync enabled</span>
+                </>
+              )}
+            </div>
+          )}
+          {!supabase && (
+            <div className="flex items-center gap-2 px-3 py-2 text-[10px] text-stone-400">
+              <CloudOff size={12} />
+              <span>Offline mode</span>
+            </div>
+          )}
+
           <button
             onClick={() => setSettingsOpen(true)}
             className="w-full flex items-center gap-2 text-stone-600 hover:text-stone-900 hover:bg-stone-200/50 px-3 py-2 rounded-lg text-xs transition-all"
