@@ -337,18 +337,20 @@ const Message = ({ message, onEdit, onDelete, onRegenerate, onCopy, onLearnMore,
   );
 };
 
-// Main Chat Window
-const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onRegenerateMessage, isActive, onClick, onLearnMore, isStreaming }) => {
+// Main Chat Window with SubTabs
+const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onRegenerateMessage, onLearnMore, isStreaming, onSubTabChange, onCloseSubTab }) => {
   const scrollRef = useRef(null);
   const [input, setInput] = useState('');
   const [editingMessage, setEditingMessage] = useState(null);
   const textareaRef = useRef(null);
 
+  const activeSubTab = chat.subTabs.find((st) => st.id === chat.activeSubTabId) || chat.subTabs[0];
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [chat.messages, isStreaming]);
+  }, [activeSubTab?.messages, isStreaming]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -359,12 +361,11 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
 
   const handleSend = () => {
     if (!input.trim() || isStreaming) return;
-
     if (editingMessage) {
-      onEditMessage(chat.id, editingMessage, input);
+      onEditMessage(chat.id, activeSubTab.id, editingMessage, input);
       setEditingMessage(null);
     } else {
-      onSendMessage(chat.id, input);
+      onSendMessage(chat.id, activeSubTab.id, input);
     }
     setInput('');
   };
@@ -380,64 +381,64 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
     setInput('');
   };
 
-  if (!isActive) {
-    return (
-      <div
-        onClick={onClick}
-        className="h-full w-full bg-stone-50/50 border-r border-stone-200 cursor-pointer hover:bg-stone-100 transition-colors relative overflow-hidden group"
-      >
-        <div className="p-6">
-          <h3 className="font-serif text-xl text-stone-400 mb-6 font-medium">Main Chat</h3>
-          <div className="space-y-4 opacity-30 group-hover:opacity-60 transition-opacity">
-            {chat.messages.slice(-3).map((m, i) => (
-              <div key={i} className={`text-xs ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
-                <div className={`inline-block p-2 rounded-lg ${m.role === 'user' ? 'bg-stone-200' : 'bg-white border'}`}>
-                  {m.content.substring(0, 40)}...
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-stone-100/30 backdrop-blur-sm">
-            <div className="bg-white shadow-xl border border-stone-200 rounded-full px-6 py-3 text-sm font-medium text-stone-700 flex items-center gap-2">
-              <ChevronLeft size={16} /> Back to Main
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full w-full bg-white relative">
+      {/* SubTab Bar */}
+      <div className="border-b border-stone-200 bg-white">
+        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar px-2">
+          {chat.subTabs.map((subTab) => (
+            <button
+              key={subTab.id}
+              onClick={() => onSubTabChange(chat.id, subTab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap group ${
+                chat.activeSubTabId === subTab.id
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <span>{subTab.title}</span>
+              {subTab.id !== 'main' && chat.subTabs.length > 1 && (
+                <X
+                  size={14}
+                  className="opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCloseSubTab(chat.id, subTab.id);
+                  }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar" ref={scrollRef}>
         <div className="max-w-4xl mx-auto space-y-6 pb-8">
-          {chat.messages.length === 0 && (
+          {activeSubTab.messages.length === 0 && (
             <div className="text-center mt-20 space-y-4 animate-in fade-in duration-700">
               <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-lg">
                 <Sparkles size={28} />
               </div>
               <h2 className="text-2xl font-serif text-stone-800">{chat.title}</h2>
-              <p className="text-stone-500 max-w-md mx-auto">
-                {chat.type === 'deep-dive' ? 'Comprehensive analysis with detailed explanations' : 'Start a conversation with Claude'}
-              </p>
+              <p className="text-stone-500 max-w-md mx-auto">Start a conversation with Claude</p>
             </div>
           )}
 
-          {chat.messages.map((msg, idx) => (
+          {activeSubTab.messages.map((msg, idx) => (
             <Message
               key={idx}
               message={msg}
               onEdit={handleEdit}
-              onDelete={(m) => onDeleteMessage(chat.id, idx)}
-              onRegenerate={idx === chat.messages.length - 1 ? () => onRegenerateMessage(chat.id) : null}
+              onDelete={() => onDeleteMessage(chat.id, activeSubTab.id, idx)}
+              onRegenerate={idx === activeSubTab.messages.length - 1 ? () => onRegenerateMessage(chat.id, activeSubTab.id) : null}
               onLearnMore={onLearnMore}
-              isLast={idx === chat.messages.length - 1}
-              isStreaming={isStreaming && idx === chat.messages.length - 1}
+              isLast={idx === activeSubTab.messages.length - 1}
+              isStreaming={isStreaming && idx === activeSubTab.messages.length - 1}
             />
           ))}
 
-          {isStreaming && chat.messages[chat.messages.length - 1]?.role !== 'assistant' && (
+          {isStreaming && activeSubTab.messages[activeSubTab.messages.length - 1]?.role !== 'assistant' && (
             <div className="flex gap-4">
               <div className="w-8 h-8 rounded-lg bg-stone-200 flex-shrink-0 animate-pulse" />
               <div className="flex items-center gap-1 mt-2">
@@ -632,7 +633,15 @@ const SettingsModal = ({ isOpen, onClose, currentModel, onModelChange, prompts, 
 export default function App() {
   const [activeTabId, setActiveTabId] = useState('main');
   const [tabs, setTabs] = useState([
-    { id: 'main', title: 'New Chat', type: 'main', messages: [], model: 'claude-haiku-4-5' }
+    {
+      id: 'main',
+      title: 'New Chat',
+      model: 'claude-haiku-4-5',
+      activeSubTabId: 'main',
+      subTabs: [
+        { id: 'main', title: 'Chat', messages: [] }
+      ]
+    }
   ]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -681,15 +690,22 @@ export default function App() {
   }, [isStreaming, isMobile]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const showSplitView = activeTab?.type === 'deep-dive';
+  const activeSubTab = activeTab?.subTabs.find((st) => st.id === activeTab.activeSubTabId);
 
-  const handleSendMessage = async (chatId, text) => {
+  const handleSendMessage = async (chatId, subTabId, text) => {
     setTabs((prev) =>
-      prev.map((t) => {
-        if (t.id === chatId) {
-          return { ...t, messages: [...t.messages, { role: 'user', content: text }] };
+      prev.map((chat) => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            subTabs: chat.subTabs.map((st) =>
+              st.id === subTabId
+                ? { ...st, messages: [...st.messages, { role: 'user', content: text }] }
+                : st
+            )
+          };
         }
-        return t;
+        return chat;
       })
     );
 
@@ -698,31 +714,46 @@ export default function App() {
 
     try {
       const currentChat = tabsRef.current.find((t) => t.id === chatId);
-      const history = currentChat ? [...currentChat.messages, { role: 'user', content: text }] : [{ role: 'user', content: text }];
+      const currentSubTab = currentChat?.subTabs.find((st) => st.id === subTabId);
+      const history = currentSubTab ? [...currentSubTab.messages, { role: 'user', content: text }] : [{ role: 'user', content: text }];
       const model = currentChat?.model || 'claude-haiku-4-5';
 
       const stream = streamClaudeResponse(history, model, prompts.system);
 
-      // Add empty assistant message
       setTabs((prev) =>
-        prev.map((t) => {
-          if (t.id === chatId) {
-            return { ...t, messages: [...t.messages, { role: 'assistant', content: '' }] };
+        prev.map((chat) => {
+          if (chat.id === chatId) {
+            return {
+              ...chat,
+              subTabs: chat.subTabs.map((st) =>
+                st.id === subTabId
+                  ? { ...st, messages: [...st.messages, { role: 'assistant', content: '' }] }
+                  : st
+              )
+            };
           }
-          return t;
+          return chat;
         })
       );
 
       for await (const chunk of stream) {
         fullResponse += chunk;
         setTabs((prev) =>
-          prev.map((t) => {
-            if (t.id === chatId) {
-              const msgs = [...t.messages];
-              msgs[msgs.length - 1].content = fullResponse;
-              return { ...t, messages: msgs };
+          prev.map((chat) => {
+            if (chat.id === chatId) {
+              return {
+                ...chat,
+                subTabs: chat.subTabs.map((st) => {
+                  if (st.id === subTabId) {
+                    const msgs = [...st.messages];
+                    msgs[msgs.length - 1].content = fullResponse;
+                    return { ...st, messages: msgs };
+                  }
+                  return st;
+                })
+              };
             }
-            return t;
+            return chat;
           })
         );
       }
@@ -734,67 +765,123 @@ export default function App() {
     }
   };
 
-  const handleEditMessage = (chatId, message, newContent) => {
+  const handleEditMessage = (chatId, subTabId, message, newContent) => {
     setTabs((prev) =>
-      prev.map((t) => {
-        if (t.id === chatId) {
-          const idx = t.messages.indexOf(message);
-          if (idx !== -1) {
-            const newMessages = t.messages.slice(0, idx);
-            return { ...t, messages: newMessages };
-          }
+      prev.map((chat) => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            subTabs: chat.subTabs.map((st) => {
+              if (st.id === subTabId) {
+                const idx = st.messages.indexOf(message);
+                if (idx !== -1) {
+                  return { ...st, messages: st.messages.slice(0, idx) };
+                }
+              }
+              return st;
+            })
+          };
         }
-        return t;
+        return chat;
       })
     );
-    handleSendMessage(chatId, newContent);
+    handleSendMessage(chatId, subTabId, newContent);
   };
 
-  const handleDeleteMessage = (chatId, messageIndex) => {
+  const handleDeleteMessage = (chatId, subTabId, messageIndex) => {
     setTabs((prev) =>
-      prev.map((t) => {
-        if (t.id === chatId) {
-          const newMessages = t.messages.filter((_, idx) => idx !== messageIndex);
-          return { ...t, messages: newMessages };
+      prev.map((chat) => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            subTabs: chat.subTabs.map((st) =>
+              st.id === subTabId
+                ? { ...st, messages: st.messages.filter((_, idx) => idx !== messageIndex) }
+                : st
+            )
+          };
         }
-        return t;
+        return chat;
       })
     );
   };
 
-  const handleRegenerateMessage = (chatId) => {
+  const handleRegenerateMessage = (chatId, subTabId) => {
     setTabs((prev) =>
-      prev.map((t) => {
-        if (t.id === chatId && t.messages.length >= 2) {
-          const lastUserMessage = [...t.messages].reverse().find((m) => m.role === 'user');
-          if (lastUserMessage) {
-            const newMessages = t.messages.slice(0, -1);
-            setTimeout(() => handleSendMessage(chatId, lastUserMessage.content), 0);
-            return { ...t, messages: newMessages };
-          }
+      prev.map((chat) => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            subTabs: chat.subTabs.map((st) => {
+              if (st.id === subTabId && st.messages.length >= 2) {
+                const lastUserMessage = [...st.messages].reverse().find((m) => m.role === 'user');
+                if (lastUserMessage) {
+                  setTimeout(() => handleSendMessage(chatId, subTabId, lastUserMessage.content), 0);
+                  return { ...st, messages: st.messages.slice(0, -1) };
+                }
+              }
+              return st;
+            })
+          };
         }
-        return t;
+        return chat;
       })
     );
   };
 
   const startDeepDive = (topic) => {
-    const newTabId = `dive-${Date.now()}`;
-    const newTab = {
-      id: newTabId,
-      title: `${topic.substring(0, 30)}...`,
-      type: 'deep-dive',
-      messages: [],
-      model: 'claude-haiku-4-5',
+    if (!activeTab) return;
+
+    const newSubTabId = `dive-${Date.now()}`;
+    const newSubTab = {
+      id: newSubTabId,
+      title: topic.substring(0, 20),
+      messages: []
     };
 
-    setTabs((prev) => [...prev, newTab]);
-    setActiveTabId(newTabId);
+    setTabs((prev) =>
+      prev.map((chat) => {
+        if (chat.id === activeTabId) {
+          return {
+            ...chat,
+            activeSubTabId: newSubTabId,
+            subTabs: [...chat.subTabs, newSubTab]
+          };
+        }
+        return chat;
+      })
+    );
 
     setTimeout(() => {
       const promptText = prompts.deepDive.replace('{topic}', topic);
-      handleSendMessage(newTabId, promptText);
+      handleSendMessage(activeTabId, newSubTabId, promptText);
     }, 100);
+  };
+
+  const changeSubTab = (chatId, subTabId) => {
+    setTabs((prev) =>
+      prev.map((chat) =>
+        chat.id === chatId ? { ...chat, activeSubTabId: subTabId } : chat
+      )
+    );
+  };
+
+  const closeSubTab = (chatId, subTabId) => {
+    setTabs((prev) =>
+      prev.map((chat) => {
+        if (chat.id === chatId) {
+          const newSubTabs = chat.subTabs.filter((st) => st.id !== subTabId);
+          if (newSubTabs.length === 0) return chat; // Don't allow closing last subtab
+
+          const newActiveSubTabId = chat.activeSubTabId === subTabId
+            ? newSubTabs[0].id
+            : chat.activeSubTabId;
+
+          return { ...chat, subTabs: newSubTabs, activeSubTabId: newActiveSubTabId };
+        }
+        return chat;
+      })
+    );
   };
 
   const closeTab = (id, e) => {
@@ -857,7 +944,13 @@ export default function App() {
           <button
             onClick={() => {
               const newId = `chat-${Date.now()}`;
-              setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-haiku-4-5' }]);
+              setTabs((prev) => [...prev, {
+                id: newId,
+                title: 'New Chat',
+                model: 'claude-haiku-4-5',
+                activeSubTabId: 'main',
+                subTabs: [{ id: 'main', title: 'Chat', messages: [] }]
+              }]);
               setActiveTabId(newId);
               if (isMobile) setSidebarOpen(false);
             }}
@@ -880,7 +973,7 @@ export default function App() {
                 activeTabId === tab.id ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-200/50'
               }`}
             >
-              <MessageSquare size={13} className={tab.type === 'deep-dive' ? 'text-orange-600' : ''} />
+              <MessageSquare size={13} />
               <span className="truncate flex-1">{tab.title}</span>
               {tab.id !== 'main' && (
                 <X
@@ -935,7 +1028,7 @@ export default function App() {
                       : 'text-stone-600 hover:bg-stone-100'
                   }`}
                 >
-                  <MessageSquare size={12} className={tab.type === 'deep-dive' ? 'text-orange-600' : 'text-stone-400'} />
+                  <MessageSquare size={12} className="text-stone-400" />
                   <span className="max-w-[120px] truncate">
                     {tab.title}
                   </span>
@@ -957,7 +1050,13 @@ export default function App() {
               <button
                 onClick={() => {
                   const newId = `chat-${Date.now()}`;
-                  setTabs((prev) => [...prev, { id: newId, title: 'New Chat', type: 'main', messages: [], model: 'claude-haiku-4-5' }]);
+                  setTabs((prev) => [...prev, {
+                    id: newId,
+                    title: 'New Chat',
+                    model: 'claude-haiku-4-5',
+                    activeSubTabId: 'main',
+                    subTabs: [{ id: 'main', title: 'Chat', messages: [] }]
+                  }]);
                   setActiveTabId(newId);
                 }}
                 className="flex items-center gap-1 px-2 py-1.5 text-stone-500 hover:text-orange-600 hover:bg-stone-100 rounded-lg transition-all"
@@ -969,45 +1068,23 @@ export default function App() {
           </div>
         </div>
 
-        {/* Chat Panes */}
-        <div className="flex-1 relative overflow-hidden">
-          {/* Main Chat */}
-          <div className={`absolute inset-0 transition-all duration-500 ${showSplitView ? (isMobile ? 'w-0' : 'w-80') : 'w-full'}`}>
+        {/* Chat Window */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab ? (
             <ChatWindow
-              chat={tabs.find((t) => t.id === 'main') || tabs[0]}
-              isActive={!showSplitView}
-              onClick={() => setActiveTabId('main')}
+              chat={activeTab}
               onSendMessage={handleSendMessage}
               onEditMessage={handleEditMessage}
               onDeleteMessage={handleDeleteMessage}
               onRegenerateMessage={handleRegenerateMessage}
               onLearnMore={startDeepDive}
-              isStreaming={isStreaming && activeTabId === 'main'}
+              isStreaming={isStreaming}
+              onSubTabChange={changeSubTab}
+              onCloseSubTab={closeSubTab}
             />
-          </div>
-
-          {/* Deep Dive Panel - Full screen on mobile, split on desktop */}
-          {activeTab && activeTab.type === 'deep-dive' && (
-            <div className={`absolute top-0 bottom-0 bg-white shadow-2xl transition-all duration-500 z-20
-              ${isMobile ? 'left-0 right-0' : 'right-0'}
-              ${showSplitView ? (isMobile ? 'w-full' : 'w-[calc(100%-20rem)]') : 'w-0'}
-            `}>
-              <ChatWindow
-                chat={activeTab}
-                isActive={true}
-                onSendMessage={handleSendMessage}
-                onEditMessage={handleEditMessage}
-                onDeleteMessage={handleDeleteMessage}
-                onRegenerateMessage={handleRegenerateMessage}
-                onLearnMore={startDeepDive}
-                isStreaming={isStreaming && activeTabId === activeTab.id}
-              />
-              <button
-                onClick={() => closeTab(activeTab.id)}
-                className="absolute top-3 right-3 p-2 bg-white hover:bg-stone-100 border border-stone-200 rounded-lg text-stone-500 hover:text-stone-700 transition-all shadow-sm"
-              >
-                <X size={16} />
-              </button>
+          ) : (
+            <div className="flex items-center justify-center h-full text-stone-400">
+              <p>No chat selected</p>
             </div>
           )}
         </div>
