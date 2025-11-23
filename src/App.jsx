@@ -393,7 +393,7 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
             <button
               key={subTab.id}
               onClick={() => onSubTabChange(chat.id, subTab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap group ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap group ${
                 chat.activeSubTabId === subTab.id
                   ? 'border-orange-600 text-orange-600'
                   : 'border-transparent text-stone-600 hover:text-stone-900'
@@ -416,15 +416,15 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar" ref={scrollRef}>
-        <div className="max-w-4xl mx-auto space-y-6 pb-8">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar" ref={scrollRef}>
+        <div className="max-w-4xl mx-auto space-y-4 pb-6">
           {activeSubTab.messages.length === 0 && (
-            <div className="text-center mt-20 space-y-4 animate-in fade-in duration-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-lg">
-                <Sparkles size={28} />
+            <div className="text-center mt-16 space-y-3 animate-in fade-in duration-700">
+              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl mx-auto flex items-center justify-center text-white shadow-lg">
+                <Sparkles size={20} />
               </div>
-              <h2 className="text-2xl font-serif text-stone-800">{chat.title}</h2>
-              <p className="text-stone-500 max-w-md mx-auto">Start a conversation with Claude</p>
+              <h2 className="text-lg font-semibold text-stone-800">{chat.title}</h2>
+              <p className="text-xs text-stone-500 max-w-md mx-auto">Start a conversation with Claude</p>
             </div>
           )}
 
@@ -455,18 +455,18 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-stone-200 p-4 bg-white">
+      <div className="border-t border-stone-200 p-3 bg-white">
         <div className="max-w-4xl mx-auto">
           {editingMessage && (
-            <div className="mb-2 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
-              <Edit2 size={12} />
+            <div className="mb-2 flex items-center gap-2 text-[11px] text-orange-600 bg-orange-50 px-2 py-1.5 rounded-lg">
+              <Edit2 size={11} />
               Editing message
               <button onClick={cancelEdit} className="ml-auto text-stone-600 hover:text-stone-900">
-                <X size={14} />
+                <X size={12} />
               </button>
             </div>
           )}
-          <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 focus-within:ring-2 focus-within:ring-orange-200 focus-within:border-orange-300 transition-all">
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 focus-within:ring-2 focus-within:ring-orange-200 focus-within:border-orange-300 transition-all">
             <textarea
               ref={textareaRef}
               value={input}
@@ -481,15 +481,15 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
                 }
               }}
               placeholder="Message Claude..."
-              className="w-full bg-transparent border-none focus:ring-0 resize-none text-stone-800 placeholder-stone-400 text-sm max-h-40"
+              className="w-full bg-transparent border-none focus:ring-0 resize-none text-stone-800 placeholder-stone-400 text-[13px] max-h-32 leading-relaxed"
               rows={1}
               disabled={isStreaming}
             />
-            <div className="flex justify-between items-center mt-2 pt-2 border-t border-stone-200">
-              <div className="text-xs text-stone-400">
+            <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-stone-200">
+              <div className="text-[10px] text-stone-400">
                 {chat.model && MODELS[chat.model] && (
                   <span className="flex items-center gap-1">
-                    <Code size={12} />
+                    <Code size={10} />
                     {MODELS[chat.model].name}
                   </span>
                 )}
@@ -497,19 +497,19 @@ const ChatWindow = ({ chat, onSendMessage, onEditMessage, onDeleteMessage, onReg
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isStreaming}
-                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-all ${
                   input.trim() && !isStreaming
-                    ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-md hover:shadow-lg'
+                    ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm hover:shadow-md'
                     : 'bg-stone-200 text-stone-400 cursor-not-allowed'
                 }`}
               >
                 {editingMessage ? 'Update' : 'Send'}
-                <Send size={14} />
+                <Send size={12} />
               </button>
             </div>
           </div>
-          <div className="text-center mt-2">
-            <span className="text-[10px] text-stone-400">Claude can make mistakes. Please verify important information.</span>
+          <div className="text-center mt-1.5">
+            <span className="text-[9px] text-stone-400">Claude can make mistakes. Verify important information.</span>
           </div>
         </div>
       </div>
@@ -806,6 +806,22 @@ export default function App() {
           })
         );
       }
+
+      // Auto-generate chat title from first message
+      const currentChatAfter = tabsRef.current.find((t) => t.id === chatId);
+      const mainSubTab = currentChatAfter?.subTabs.find((st) => st.id === 'main');
+      if (currentChatAfter?.title === 'New Chat' && mainSubTab?.messages.length === 2) {
+        const firstUserMsg = mainSubTab.messages[0]?.content || '';
+        const title = firstUserMsg.length > 40
+          ? firstUserMsg.substring(0, 40).trim() + '...'
+          : firstUserMsg.trim() || 'New Chat';
+
+        setTabs((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId ? { ...chat, title } : chat
+          )
+        );
+      }
     } catch (error) {
       console.error('Stream error:', error);
       alert(`Error: ${error.message}`);
@@ -1009,14 +1025,14 @@ export default function App() {
               setActiveTabId(newId);
               if (isMobile) setSidebarOpen(false);
             }}
-            className="w-full flex items-center gap-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+            className="w-full flex items-center gap-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm"
           >
-            <Plus size={16} className="text-orange-600" /> New Chat
+            <Plus size={14} className="text-orange-600" /> New Chat
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
-          <div className="text-[10px] font-semibold text-stone-400 px-2 py-1 uppercase tracking-wider">Chats</div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 custom-scrollbar">
+          <div className="text-[9px] font-semibold text-stone-400 px-2 py-1 uppercase tracking-wider">Chats</div>
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -1024,11 +1040,11 @@ export default function App() {
                 setActiveTabId(tab.id);
                 if (isMobile) setSidebarOpen(false);
               }}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 group transition-all ${
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-2 group transition-all ${
                 activeTabId === tab.id ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-200/50'
               }`}
             >
-              <MessageSquare size={13} />
+              <MessageSquare size={12} />
               <span className="truncate flex-1">{tab.title}</span>
               {tab.id !== 'main' && (
                 <X
@@ -1083,18 +1099,18 @@ export default function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full relative">
         {/* Top Bar */}
-        <div className="h-14 md:h-12 border-b border-stone-200 bg-white flex items-center px-3 md:px-4 justify-between shadow-sm z-10">
-          <div className="flex items-center gap-2 md:gap-3 flex-1">
+        <div className="h-12 md:h-10 border-b border-stone-200 bg-white flex items-center px-3 md:px-3 justify-between shadow-sm z-10">
+          <div className="flex items-center gap-2 flex-1">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 md:p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+              className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
             >
-              <Menu size={20} className="md:w-[18px] md:h-[18px]" />
+              <Menu size={16} />
             </button>
 
             {/* Mobile: Show current chat title */}
             <div className="md:hidden flex-1">
-              <h1 className="font-medium text-stone-900 text-sm truncate">
+              <h1 className="font-medium text-stone-900 text-xs truncate">
                 {activeTab?.title || 'New Chat'}
               </h1>
             </div>
@@ -1105,14 +1121,14 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTabId(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap group ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md transition-all whitespace-nowrap group ${
                     activeTabId === tab.id
                       ? 'bg-white text-stone-800 shadow-sm border border-stone-200'
                       : 'text-stone-600 hover:bg-stone-100'
                   }`}
                 >
-                  <MessageSquare size={12} className="text-stone-400" />
-                  <span className="max-w-[120px] truncate">
+                  <MessageSquare size={11} className="text-stone-400" />
+                  <span className="max-w-[100px] truncate">
                     {tab.title}
                   </span>
                   {tabs.length > 1 && (
@@ -1142,10 +1158,10 @@ export default function App() {
                   }]);
                   setActiveTabId(newId);
                 }}
-                className="flex items-center gap-1 px-2 py-1.5 text-stone-500 hover:text-orange-600 hover:bg-stone-100 rounded-lg transition-all"
+                className="flex items-center gap-1 px-1.5 py-1 text-stone-500 hover:text-orange-600 hover:bg-stone-100 rounded-md transition-all"
                 title="New Chat"
               >
-                <Plus size={14} />
+                <Plus size={12} />
               </button>
             </div>
           </div>
