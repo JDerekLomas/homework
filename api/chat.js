@@ -14,9 +14,11 @@ export default async function handler(req) {
   try {
     const { messages, system, model = 'claude-haiku-4-5' } = await req.json();
 
-    const ANTHROPIC_API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
+    // Vercel doesn't expose VITE_ prefixed vars at runtime, use direct env var
+    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
 
     if (!ANTHROPIC_API_KEY) {
+      console.error('API key not found. Available env vars:', Object.keys(process.env).filter(k => k.includes('API')));
       return new Response(JSON.stringify({ error: 'API key not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
