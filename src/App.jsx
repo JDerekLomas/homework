@@ -5,13 +5,16 @@ import {
   CheckCircle,
   User,
   Brain,
-  ArrowRight
+  ArrowRight,
+  Settings,
+  X,
+  RotateCcw
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from './supabase';
 
 // --- INTERVIEW CONFIGURATION ---
-const INTERVIEW_PROMPT = `You are conducting a 15-minute laddering interview to understand how people use generative AI. Your goal is to uncover not just what people do, but why it matters to them—moving from surface behaviors to deeper values and emotions.
+const DEFAULT_INTERVIEW_PROMPT = `You are conducting a 15-minute laddering interview to understand how people use generative AI. Your goal is to uncover not just what people do, but why it matters to them—moving from surface behaviors to deeper values and emotions.
 
 Interview Structure:
 
@@ -51,12 +54,12 @@ Closing (1 min): Thank them. Ask: "What's one thing about your AI use that you'v
 Tone: Warm, curious, unhurried. You're a thoughtful researcher, not a survey bot.`;
 
 // Stream generator
-async function* streamClaudeResponse(messages, sessionId) {
+async function* streamClaudeResponse(messages, sessionId, systemPrompt) {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      system: INTERVIEW_PROMPT,
+      system: systemPrompt,
       messages: messages,
       model: 'claude-haiku-4-5',
     })
@@ -135,11 +138,20 @@ const Message = ({ message }) => {
 };
 
 // Welcome Screen
-const WelcomeScreen = ({ onStart }) => {
+const WelcomeScreen = ({ onStart, onSettings }) => {
   const [consented, setConsented] = useState(false);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 py-12 text-center overflow-y-auto">
+    <div className="relative flex flex-col items-center justify-center h-full px-6 py-12 text-center overflow-y-auto">
+      {/* Settings button */}
+      <button
+        onClick={onSettings}
+        className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
+        title="Settings"
+      >
+        <Settings size={20} />
+      </button>
+
       <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-2xl mb-6 animate-in zoom-in-95 duration-500">
         <Brain size={40} />
       </div>
@@ -218,6 +230,91 @@ const WelcomeScreen = ({ onStart }) => {
   );
 };
 
+// Settings Panel
+const SettingsPanel = ({ isOpen, onClose, prompt, onSave }) => {
+  const [editedPrompt, setEditedPrompt] = useState(prompt);
+
+  useEffect(() => {
+    setEditedPrompt(prompt);
+  }, [prompt, isOpen]);
+
+  const handleSave = () => {
+    onSave(editedPrompt);
+    onClose();
+  };
+
+  const handleReset = () => {
+    setEditedPrompt(DEFAULT_INTERVIEW_PROMPT);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-500 to-indigo-600">
+          <div className="flex items-center gap-3">
+            <Settings size={20} className="text-white" />
+            <h2 className="text-lg font-semibold text-white">Interview Settings</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-white/20 transition-colors text-white"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  System Prompt
+                </label>
+                <button
+                  onClick={handleReset}
+                  className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 transition-colors"
+                >
+                  <RotateCcw size={14} />
+                  Reset to Default
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                This prompt instructs the AI on how to conduct the interview. Edit it to customize the interview style, questions, or focus areas.
+              </p>
+              <textarea
+                value={editedPrompt}
+                onChange={(e) => setEditedPrompt(e.target.value)}
+                className="w-full h-80 px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-800 leading-relaxed focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-all resize-none font-mono"
+                placeholder="Enter the system prompt..."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-medium rounded-lg hover:shadow-lg transition-all"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main App
 function App() {
   const [started, setStarted] = useState(false);
@@ -225,6 +322,8 @@ function App() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
+  const [showSettings, setShowSettings] = useState(false);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -255,7 +354,7 @@ function App() {
     try {
       let assistantMessage = '';
 
-      for await (const chunk of streamClaudeResponse([greeting], newSessionId)) {
+      for await (const chunk of streamClaudeResponse([greeting], newSessionId, systemPrompt)) {
         assistantMessage += chunk;
         setMessages([{ role: 'assistant', content: assistantMessage }]);
       }
@@ -292,7 +391,7 @@ function App() {
       let assistantMessage = '';
       const conversationHistory = newMessages.map(m => ({ role: m.role, content: m.content }));
 
-      for await (const chunk of streamClaudeResponse(conversationHistory, sessionId)) {
+      for await (const chunk of streamClaudeResponse(conversationHistory, sessionId, systemPrompt)) {
         assistantMessage += chunk;
         setMessages([...newMessages, { role: 'assistant', content: assistantMessage }]);
       }
@@ -320,22 +419,39 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      {/* Settings Panel */}
+      <SettingsPanel
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        prompt={systemPrompt}
+        onSave={setSystemPrompt}
+      />
+
       {/* Mobile-first container with desktop popup */}
       <div className="w-full h-screen md:h-[90vh] md:max-w-md md:rounded-3xl bg-white md:shadow-2xl flex flex-col overflow-hidden">
         {!started ? (
-          <WelcomeScreen onStart={startInterview} />
+          <WelcomeScreen onStart={startInterview} onSettings={() => setShowSettings(true)} />
         ) : (
           <>
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-5 py-4 shadow-md">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Brain size={20} className="text-white" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <Brain size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-white font-semibold text-base">AI Research Interview</h2>
+                    <p className="text-purple-100 text-xs">Conversational · Confidential</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-white font-semibold text-base">AI Research Interview</h2>
-                  <p className="text-purple-100 text-xs">Conversational · Confidential</p>
-                </div>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="p-2 rounded-full hover:bg-white/20 transition-colors text-white"
+                  title="Settings"
+                >
+                  <Settings size={20} />
+                </button>
               </div>
             </div>
 
