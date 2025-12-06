@@ -8,7 +8,12 @@ import {
   ArrowRight,
   Settings,
   X,
-  RotateCcw
+  RotateCcw,
+  History,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Trash2
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from './supabase';
@@ -230,13 +235,96 @@ const WelcomeScreen = ({ onStart, onSettings }) => {
   );
 };
 
+// Session History Item
+const SessionHistoryItem = ({ session, onDelete }) => {
+  const [expanded, setExpanded] = useState(false);
+  const startedAt = new Date(session.started_at).toLocaleString();
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3 text-left">
+          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+            <FileText size={14} className="text-purple-600" />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-gray-900">
+              {session.messages?.[0]?.content?.slice(0, 50) || 'Interview Session'}...
+            </div>
+            <div className="text-xs text-gray-500">{startedAt}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(session.session_id);
+            }}
+            className="p-1.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+          {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-200 bg-gray-50 p-4 max-h-96 overflow-y-auto">
+          {/* System Prompt */}
+          {session.system_prompt && (
+            <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Settings size={12} className="text-purple-600" />
+                <span className="text-xs font-semibold text-purple-700 uppercase">System Prompt</span>
+              </div>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto">
+                {session.system_prompt}
+              </p>
+            </div>
+          )}
+
+          {/* Messages */}
+          <div className="space-y-3">
+            {session.messages?.map((msg, idx) => (
+              <div key={idx} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-lg px-3 py-2 ${
+                  msg.role === 'user'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white border border-gray-200'
+                }`}>
+                  <div className="text-[10px] font-semibold uppercase mb-1 opacity-70">
+                    {msg.role === 'user' ? 'User' : 'AI'}
+                  </div>
+                  <p className={`text-xs whitespace-pre-wrap ${msg.role === 'user' ? 'text-white' : 'text-gray-700'}`}>
+                    {msg.content}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Settings Panel
-const SettingsPanel = ({ isOpen, onClose, prompt, onSave }) => {
+const SettingsPanel = ({ isOpen, onClose, prompt, onSave, sessions, onLoadSessions, onDeleteSession }) => {
   const [editedPrompt, setEditedPrompt] = useState(prompt);
+  const [activeTab, setActiveTab] = useState('prompt');
 
   useEffect(() => {
     setEditedPrompt(prompt);
   }, [prompt, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'history') {
+      onLoadSessions();
+    }
+  }, [isOpen, activeTab]);
 
   const handleSave = () => {
     onSave(editedPrompt);
@@ -266,50 +354,103 @@ const SettingsPanel = ({ isOpen, onClose, prompt, onSave }) => {
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('prompt')}
+            className={`flex-1 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+              activeTab === 'prompt'
+                ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <FileText size={16} />
+            Prompt
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+              activeTab === 'history'
+                ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <History size={16} />
+            History
+            {sessions.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-purple-100 text-purple-600 rounded-full">
+                {sessions.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  System Prompt
-                </label>
-                <button
-                  onClick={handleReset}
-                  className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 transition-colors"
-                >
-                  <RotateCcw size={14} />
-                  Reset to Default
-                </button>
+          {activeTab === 'prompt' ? (
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    System Prompt
+                  </label>
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                    Reset to Default
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  This prompt instructs the AI on how to conduct the interview. Edit it to customize the interview style, questions, or focus areas.
+                </p>
+                <textarea
+                  value={editedPrompt}
+                  onChange={(e) => setEditedPrompt(e.target.value)}
+                  className="w-full h-80 px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-800 leading-relaxed focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-all resize-none font-mono"
+                  placeholder="Enter the system prompt..."
+                />
               </div>
-              <p className="text-xs text-gray-500 mb-3">
-                This prompt instructs the AI on how to conduct the interview. Edit it to customize the interview style, questions, or focus areas.
-              </p>
-              <textarea
-                value={editedPrompt}
-                onChange={(e) => setEditedPrompt(e.target.value)}
-                className="w-full h-80 px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-800 leading-relaxed focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-all resize-none font-mono"
-                placeholder="Enter the system prompt..."
-              />
             </div>
-          </div>
+          ) : (
+            <div className="space-y-3">
+              {sessions.length === 0 ? (
+                <div className="text-center py-12">
+                  <History size={48} className="mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500 text-sm">No interview sessions yet</p>
+                  <p className="text-gray-400 text-xs mt-1">Complete an interview to see it here</p>
+                </div>
+              ) : (
+                sessions.map((session) => (
+                  <SessionHistoryItem
+                    key={session.session_id}
+                    session={session}
+                    onDelete={onDeleteSession}
+                  />
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-medium rounded-lg hover:shadow-lg transition-all"
-          >
-            Save Changes
-          </button>
-        </div>
+        {activeTab === 'prompt' && (
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-medium rounded-lg hover:shadow-lg transition-all"
+            >
+              Save Changes
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -324,8 +465,41 @@ function App() {
   const [sessionId, setSessionId] = useState(null);
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [showSettings, setShowSettings] = useState(false);
+  const [sessions, setSessions] = useState([]);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+
+  // Load sessions from Supabase
+  const loadSessions = async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('interview_sessions')
+        .select('*')
+        .order('started_at', { ascending: false });
+
+      if (error) throw error;
+      setSessions(data || []);
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    }
+  };
+
+  // Delete a session
+  const deleteSession = async (sessionIdToDelete) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from('interview_sessions')
+        .delete()
+        .eq('session_id', sessionIdToDelete);
+
+      if (error) throw error;
+      setSessions(sessions.filter(s => s.session_id !== sessionIdToDelete));
+    } catch (error) {
+      console.error('Error deleting session:', error);
+    }
+  };
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -364,6 +538,7 @@ function App() {
         await supabase.from('interview_sessions').insert({
           session_id: newSessionId,
           started_at: new Date().toISOString(),
+          system_prompt: systemPrompt,
           messages: [{ role: 'assistant', content: assistantMessage }]
         });
       }
@@ -402,6 +577,7 @@ function App() {
       if (supabase && sessionId) {
         await supabase.from('interview_sessions').upsert({
           session_id: sessionId,
+          system_prompt: systemPrompt,
           messages: finalMessages,
           updated_at: new Date().toISOString()
         });
@@ -425,6 +601,9 @@ function App() {
         onClose={() => setShowSettings(false)}
         prompt={systemPrompt}
         onSave={setSystemPrompt}
+        sessions={sessions}
+        onLoadSessions={loadSessions}
+        onDeleteSession={deleteSession}
       />
 
       {/* Mobile-first container with desktop popup */}
